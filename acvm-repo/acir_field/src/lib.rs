@@ -15,12 +15,14 @@ pub struct FrConfig;
 pub type Goldilocks = Fp64<MontBackend<FrConfig, 1>>;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "bn254")] {
+    if #[cfg(feature = "Goldilocks")] {
         mod generic_ark;
-        // pub type FieldElement = generic_ark::FieldElement<ark_bn254::Fr>;
         pub type FieldElement = generic_ark::FieldElement<Goldilocks>;
         pub const CHOSEN_FIELD : FieldOptions = FieldOptions::GOLDILOCKS;
-
+    } else if #[cfg(feature = "bn254")] {
+        mod generic_ark;
+        pub type FieldElement = generic_ark::FieldElement<ark_bn254::Fr>;
+        pub const CHOSEN_FIELD : FieldOptions = FieldOptions::BN254;
     } else if #[cfg(feature = "bls12_381")] {
         mod generic_ark;
         pub type FieldElement = generic_ark::FieldElement<ark_bls12_381::Fr>;
@@ -74,4 +76,4 @@ macro_rules! assert_unique_feature {
 }
 // https://internals.rust-lang.org/t/mutually-exclusive-feature-flags/8601/7
 // If another field/feature is added, we add it here too
-assert_unique_feature!("bn254", "bls12_381");
+assert_unique_feature!("bn254", "bls12_381", "Goldilocks");
