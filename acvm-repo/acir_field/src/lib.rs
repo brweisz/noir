@@ -6,11 +6,20 @@
 use num_bigint::BigUint;
 use num_traits::Num;
 
+use ark_ff::fields::{Fp64, MontBackend, MontConfig};
+
+#[derive(MontConfig)]
+#[modulus = "18446744069414584321"]
+#[generator = "7"]
+pub struct FrConfig;
+pub type Goldilocks = Fp64<MontBackend<FrConfig, 1>>;
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "bn254")] {
         mod generic_ark;
-        pub type FieldElement = generic_ark::FieldElement<ark_bn254::Fr>;
-        pub const CHOSEN_FIELD : FieldOptions = FieldOptions::BN254;
+        // pub type FieldElement = generic_ark::FieldElement<ark_bn254::Fr>;
+        pub type FieldElement = generic_ark::FieldElement<Goldilocks>;
+        pub const CHOSEN_FIELD : FieldOptions = FieldOptions::GOLDILOCKS;
 
     } else if #[cfg(feature = "bls12_381")] {
         mod generic_ark;
@@ -25,6 +34,7 @@ cfg_if::cfg_if! {
 pub enum FieldOptions {
     BN254,
     BLS12_381,
+    GOLDILOCKS
 }
 
 impl FieldOptions {
@@ -32,6 +42,7 @@ impl FieldOptions {
         match self {
             FieldOptions::BN254 => "bn254",
             FieldOptions::BLS12_381 => "bls12_381",
+            FieldOptions::GOLDILOCKS => "Goldilocks"
         }
     }
 
