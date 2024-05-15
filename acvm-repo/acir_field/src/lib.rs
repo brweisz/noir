@@ -3,21 +3,16 @@
 #![warn(clippy::semicolon_if_nothing_returned)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies, unused_extern_crates))]
 
+mod fr;
+
 use num_bigint::BigUint;
 use num_traits::Num;
-
-use ark_ff::fields::{Fp64, MontBackend, MontConfig};
-
-#[derive(MontConfig)]
-#[modulus = "18446744069414584321"]
-#[generator = "7"]
-pub struct FrConfig;
-pub type Goldilocks = Fp64<MontBackend<FrConfig, 1>>;
+pub use crate::fr::GoldilocksFr;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "Goldilocks")] {
+    if #[cfg(feature = "goldilocks")] {
         mod generic_ark;
-        pub type FieldElement = generic_ark::FieldElement<Goldilocks>;
+        pub type FieldElement = generic_ark::FieldElement<GoldilocksFr>;
         pub const CHOSEN_FIELD : FieldOptions = FieldOptions::GOLDILOCKS;
     } else if #[cfg(feature = "bn254")] {
         mod generic_ark;
@@ -44,7 +39,7 @@ impl FieldOptions {
         match self {
             FieldOptions::BN254 => "bn254",
             FieldOptions::BLS12_381 => "bls12_381",
-            FieldOptions::GOLDILOCKS => "Goldilocks"
+            FieldOptions::GOLDILOCKS => "goldilocks"
         }
     }
 
@@ -76,4 +71,4 @@ macro_rules! assert_unique_feature {
 }
 // https://internals.rust-lang.org/t/mutually-exclusive-feature-flags/8601/7
 // If another field/feature is added, we add it here too
-assert_unique_feature!("bn254", "bls12_381", "Goldilocks");
+assert_unique_feature!("bn254", "bls12_381", "goldilocks");

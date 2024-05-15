@@ -37,7 +37,8 @@ pub(crate) fn evaluate_black_box<Solver: BlackBoxFunctionSolver>(
     memory: &mut Memory,
     bigint_solver: &mut BigIntSolver,
 ) -> Result<(), BlackBoxResolutionError> {
-    match op {
+    todo!()
+    /*match op {
         BlackBoxOp::Sha256 { message, output } => {
             let message = to_u8_vec(read_heap_vector(memory, message));
             let bytes = sha256(message.as_slice())?;
@@ -298,7 +299,7 @@ fn black_box_function_from_op(op: &BlackBoxOp) -> BlackBoxFunc {
         BlackBoxOp::BigIntToLeBytes { .. } => BlackBoxFunc::BigIntToLeBytes,
         BlackBoxOp::Poseidon2Permutation { .. } => BlackBoxFunc::Poseidon2Permutation,
         BlackBoxOp::Sha256Compression { .. } => BlackBoxFunc::Sha256Compression,
-    }
+    }*/
 }
 
 #[cfg(test)]
