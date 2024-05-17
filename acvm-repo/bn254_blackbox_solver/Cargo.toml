@@ -52,5 +52,6 @@ name = "criterion"
 harness = false
 
 [features]
-default = ["bn254"]
+default = ["goldilocks"]
+goldilocks = ["acir/goldilocks"]
 bn254 = ["acir/bn254"]

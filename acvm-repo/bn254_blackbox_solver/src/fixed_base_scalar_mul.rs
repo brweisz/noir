@@ -10,7 +10,8 @@ pub fn fixed_base_scalar_mul(
     low: &FieldElement,
     high: &FieldElement,
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    let low: u128 = low.try_into_u128().ok_or_else(|| {
+    todo!()
+    /*let low: u128 = low.try_into_u128().ok_or_else(|| {
         BlackBoxResolutionError::Failed(
             BlackBoxFunc::FixedBaseScalarMul,
             format!("Limb {} is not less than 2^128", low.to_hex()),
@@ -44,18 +45,19 @@ pub fn fixed_base_scalar_mul(
         Ok((FieldElement::from_repr(*res_x), FieldElement::from_repr(*res_y)))
     } else {
         Ok((FieldElement::zero(), FieldElement::zero()))
-    }
+    }*/
 }
 
 fn create_point(x: FieldElement, y: FieldElement) -> Result<grumpkin::SWAffine, String> {
-    let point = grumpkin::SWAffine::new_unchecked(x.into_repr(), y.into_repr());
+    todo!()
+    /*let point = grumpkin::SWAffine::new_unchecked(x.into_repr(), y.into_repr());
     if !point.is_on_curve() {
         return Err(format!("Point ({}, {}) is not on curve", x.to_hex(), y.to_hex()));
     };
     if !point.is_in_correct_subgroup_assuming_on_curve() {
         return Err(format!("Point ({}, {}) is not in correct subgroup", x.to_hex(), y.to_hex()));
     };
-    Ok(point)
+    Ok(point)*/
 }
 
 pub fn embedded_curve_add(
@@ -64,7 +66,8 @@ pub fn embedded_curve_add(
     input2_x: FieldElement,
     input2_y: FieldElement,
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    let point1 = create_point(input1_x, input1_y)
+    todo!()
+    /*let point1 = create_point(input1_x, input1_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
     let point2 = create_point(input2_x, input2_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
@@ -76,7 +79,7 @@ pub fn embedded_curve_add(
             BlackBoxFunc::EmbeddedCurveAdd,
             "Point is not on curve".to_string(),
         ))
-    }
+    }*/
 }
 
 #[cfg(test)]

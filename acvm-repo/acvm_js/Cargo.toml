@@ -37,6 +37,7 @@ pkg-config = "0.3"
 wasm-bindgen-test.workspace = true
 
 [features]
-default = ["bn254"]
+default = ["goldilocks"]
+goldilocks = ["acvm/goldilocks"]
 bn254 = ["acvm/bn254", "dep:bn254_blackbox_solver"]
 bls12_381 = ["acvm/bls12_381"]
