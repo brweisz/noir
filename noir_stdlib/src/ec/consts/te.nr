@@ -8,7 +8,6 @@ struct BabyJubjub {
     suborder: Field,
 }
 
-#[field(bn254)]
 pub fn baby_jubjub() -> BabyJubjub {
     BabyJubjub {
         // Baby Jubjub (ERC-2494) parameters in affine representation

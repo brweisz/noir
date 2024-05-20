@@ -236,7 +236,11 @@ impl<F: PrimeField> FieldElement<F> {
     }
 
     pub fn to_u128(self) -> u128 {
-        let bytes = self.to_be_bytes();
+        let mut bytes = [0; 32];
+        let be_bytes = self.to_be_bytes();
+        let num_bytes = be_bytes.len();
+        bytes[(32-num_bytes)..].copy_from_slice(&be_bytes);
+        //let bytes = self.to_be_bytes();
         u128::from_be_bytes(bytes[16..32].try_into().unwrap())
     }
 
