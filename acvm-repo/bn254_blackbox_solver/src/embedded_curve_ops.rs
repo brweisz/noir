@@ -101,6 +101,7 @@ fn create_point(x: FieldElement, y: FieldElement) -> Result<grumpkin::SWAffine, 
 }
 
 #[cfg(test)]
+#[cfg(feature = "bn254")]
 mod tests {
     use ark_ff::BigInteger;
 

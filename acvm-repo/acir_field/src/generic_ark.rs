@@ -492,6 +492,7 @@ fn superscript(n: u64) -> String {
 }
 
 #[cfg(test)]
+#[cfg(feature = "bn254")]
 mod tests {
     #[test]
     fn and() {
@@ -507,6 +508,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "bn254")]
     fn serialize_fixed_test_vectors() {
         // Serialized field elements from of 0, -1, -2, -3
         let hex_strings = vec![
@@ -524,6 +526,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "bn254")]
     fn deserialize_even_and_odd_length_hex() {
         // Test cases of (odd, even) length hex strings
         let hex_strings =
@@ -542,6 +545,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "bn254")]
     fn max_num_bits_smoke() {
         let max_num_bits_bn254 = crate::generic_ark::FieldElement::<ark_bn254::Fr>::max_num_bits();
         assert_eq!(max_num_bits_bn254, 254);

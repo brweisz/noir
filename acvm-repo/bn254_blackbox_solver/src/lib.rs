@@ -1,6 +1,7 @@
 #![warn(unreachable_pub)]
 #![warn(clippy::semicolon_if_nothing_returned)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies, unused_extern_crates))]
+#![allow(warnings)]
 
 use acir::{BlackBoxFunc, FieldElement};
 use acvm_blackbox_solver::{BlackBoxFunctionSolver, BlackBoxResolutionError};
