@@ -2,7 +2,7 @@
 name = "bn254_blackbox_solver"
 description = "Solvers for black box functions which are specific for the bn254 curve"
 # x-release-please-start-version
-version = "0.45.0"
+version = "0.46.0"
 # x-release-please-end
 authors.workspace = true
 edition.workspace = true
@@ -40,6 +40,7 @@ getrandom.workspace = true
 wasmer = "4.2.6"
 
 [dev-dependencies]
+ark-std = { version = "^0.4.0", default-features = false }
 criterion = "0.5.0"
 pprof = { version = "0.12", features = [
     "flamegraph",
