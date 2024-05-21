@@ -24,6 +24,7 @@ impl VerifyCommand {
             .arg(self.vk_path);
 
         let output = command.output()?;
+        println!("{:?}", output);
 
         // We currently do not distinguish between an invalid proof and an error inside the backend.
         Ok(output.status.success())
