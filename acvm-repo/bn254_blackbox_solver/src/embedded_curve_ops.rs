@@ -12,7 +12,8 @@ pub fn multi_scalar_mul(
     points: &[FieldElement],
     scalars: &[FieldElement],
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    if points.len() != scalars.len() {
+    todo!();
+    /*if points.len() != scalars.len() {
         return Err(BlackBoxResolutionError::Failed(
             BlackBoxFunc::MultiScalarMul,
             "Points and scalars must have the same length".to_string(),
@@ -62,7 +63,7 @@ pub fn multi_scalar_mul(
         Ok((FieldElement::from_repr(*out_x), FieldElement::from_repr(*out_y)))
     } else {
         Ok((FieldElement::zero(), FieldElement::zero()))
-    }
+    }*/
 }
 
 pub fn embedded_curve_add(
@@ -71,7 +72,8 @@ pub fn embedded_curve_add(
     input2_x: FieldElement,
     input2_y: FieldElement,
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    let point1 = create_point(input1_x, input1_y)
+    todo!();
+    /*let point1 = create_point(input1_x, input1_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
     let point2 = create_point(input2_x, input2_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
@@ -83,9 +85,10 @@ pub fn embedded_curve_add(
             BlackBoxFunc::EmbeddedCurveAdd,
             "Point is not on curve".to_string(),
         ))
-    }
+    }*/
 }
 
+#[cfg(feature = "bn254")]
 fn create_point(x: FieldElement, y: FieldElement) -> Result<grumpkin::SWAffine, String> {
     let point = grumpkin::SWAffine::new_unchecked(x.into_repr(), y.into_repr());
     if !point.is_on_curve() {

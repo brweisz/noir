@@ -75,13 +75,14 @@ impl BlackBoxFunctionSolver for Bn254BlackBoxSolver {
         inputs: &[FieldElement],
         domain_separator: u32,
     ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-        let inputs: Vec<grumpkin::Fq> = inputs.iter().map(|input| input.into_repr()).collect();
+        todo!();
+        /*let inputs: Vec<grumpkin::Fq> = inputs.iter().map(|input| input.into_repr()).collect();
         let result = pedersen::commitment::commit_native_with_index(&inputs, domain_separator);
         let res_x =
             FieldElement::from_repr(*result.x().expect("should not commit to point at infinity"));
         let res_y =
             FieldElement::from_repr(*result.y().expect("should not commit to point at infinity"));
-        Ok((res_x, res_y))
+        Ok((res_x, res_y))*/
     }
 
     fn pedersen_hash(
@@ -89,10 +90,11 @@ impl BlackBoxFunctionSolver for Bn254BlackBoxSolver {
         inputs: &[FieldElement],
         domain_separator: u32,
     ) -> Result<FieldElement, BlackBoxResolutionError> {
-        let inputs: Vec<grumpkin::Fq> = inputs.iter().map(|input| input.into_repr()).collect();
+        todo!();
+        /*let inputs: Vec<grumpkin::Fq> = inputs.iter().map(|input| input.into_repr()).collect();
         let result = pedersen::hash::hash_with_index(&inputs, domain_separator);
         let result = FieldElement::from_repr(result);
-        Ok(result)
+        Ok(result)*/
     }
 
     fn multi_scalar_mul(
