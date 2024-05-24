@@ -97,6 +97,8 @@ impl Backend {
         // Create the verification key and write it to the specified path
         let vk_path = temp_directory.join("vk");
 
+        println!("Estamos en la verificacion");
+
         WriteVkCommand {
             crs_path: self.crs_directory(),
             bytecode_path,

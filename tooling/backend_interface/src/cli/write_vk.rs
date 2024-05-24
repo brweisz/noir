@@ -26,6 +26,7 @@ impl WriteVkCommand {
             .arg(self.vk_path_output);
 
         let output = command.output()?;
+        println!("{:?}", output);
         if output.status.success() {
             Ok(())
         } else {
