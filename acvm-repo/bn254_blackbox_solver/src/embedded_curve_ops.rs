@@ -8,12 +8,12 @@ use acir::{BlackBoxFunc, FieldElement};
 use crate::BlackBoxResolutionError;
 
 /// Performs multi scalar multiplication of points with scalars.
+#[cfg(feature = "bn254")]
 pub fn multi_scalar_mul(
     points: &[FieldElement],
     scalars: &[FieldElement],
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    todo!();
-    /*if points.len() != scalars.len() {
+    if points.len() != scalars.len() {
         return Err(BlackBoxResolutionError::Failed(
             BlackBoxFunc::MultiScalarMul,
             "Points and scalars must have the same length".to_string(),
@@ -63,17 +63,17 @@ pub fn multi_scalar_mul(
         Ok((FieldElement::from_repr(*out_x), FieldElement::from_repr(*out_y)))
     } else {
         Ok((FieldElement::zero(), FieldElement::zero()))
-    }*/
+    }
 }
 
+#[cfg(feature = "bn254")]
 pub fn embedded_curve_add(
     input1_x: FieldElement,
     input1_y: FieldElement,
     input2_x: FieldElement,
     input2_y: FieldElement,
 ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-    todo!();
-    /*let point1 = create_point(input1_x, input1_y)
+    let point1 = create_point(input1_x, input1_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
     let point2 = create_point(input2_x, input2_y)
         .map_err(|e| BlackBoxResolutionError::Failed(BlackBoxFunc::EmbeddedCurveAdd, e))?;
@@ -85,7 +85,7 @@ pub fn embedded_curve_add(
             BlackBoxFunc::EmbeddedCurveAdd,
             "Point is not on curve".to_string(),
         ))
-    }*/
+    }
 }
 
 #[cfg(feature = "bn254")]

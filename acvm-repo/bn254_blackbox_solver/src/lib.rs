@@ -13,7 +13,7 @@ mod poseidon2;
 mod wasm;
 
 use ark_ec::AffineRepr;
-pub use embedded_curve_ops::{embedded_curve_add, multi_scalar_mul};
+
 pub use poseidon2::poseidon2_permutation;
 use wasm::Barretenberg;
 
@@ -103,7 +103,9 @@ impl BlackBoxFunctionSolver for Bn254BlackBoxSolver {
         points: &[FieldElement],
         scalars: &[FieldElement],
     ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-        multi_scalar_mul(points, scalars)
+        todo!();
+        /*use embedded_curve_ops::multi_scalar_mul;
+        multi_scalar_mul(points, scalars)*/
     }
 
     fn ec_add(
@@ -113,7 +115,9 @@ impl BlackBoxFunctionSolver for Bn254BlackBoxSolver {
         input2_x: &FieldElement,
         input2_y: &FieldElement,
     ) -> Result<(FieldElement, FieldElement), BlackBoxResolutionError> {
-        embedded_curve_add(*input1_x, *input1_y, *input2_x, *input2_y)
+        todo!();
+        /*use embedded_curve_ops::embedded_curve_add;
+        embedded_curve_add(*input1_x, *input1_y, *input2_x, *input2_y)*/
     }
 
     fn poseidon2_permutation(
