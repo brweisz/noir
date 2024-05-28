@@ -25,7 +25,10 @@ impl VerifyCommand {
             .arg(self.vk_path);
 
         let output = command.output()?;
-        println!("{:?}", string_from_stderr(&output.stderr));
+        println!("{}", string_from_stderr(&output.stderr));
+        if output.status.success() {
+            println!("Verification successful");
+        }
 
         // We currently do not distinguish between an invalid proof and an error inside the backend.
         Ok(output.status.success())
