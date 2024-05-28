@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::BackendError;
+use crate::cli::string_from_stderr;
 
 /// VerifyCommand will call the barretenberg binary
 /// to verify a proof
@@ -24,7 +25,7 @@ impl VerifyCommand {
             .arg(self.vk_path);
 
         let output = command.output()?;
-        println!("{:?}", output);
+        println!("{:?}", string_from_stderr(&output.stderr));
 
         // We currently do not distinguish between an invalid proof and an error inside the backend.
         Ok(output.status.success())

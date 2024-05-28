@@ -62,12 +62,14 @@ impl Backend {
             ProveCommand { crs_path: self.crs_directory(), bytecode_path, witness_path }
                 .run(binary_path)?;
 
-        let proof = bb_abstraction_leaks::remove_public_inputs(
+        // This is coupled with Barretenberg
+        /*let proof = bb_abstraction_leaks::remove_public_inputs(
             // TODO(https://github.com/noir-lang/noir/issues/4428)
             program.functions[0].public_inputs().0.len(),
             &proof_with_public_inputs,
         );
-        Ok(proof)
+        Ok(proof)*/
+        Ok(proof_with_public_inputs)
     }
 
     #[tracing::instrument(level = "trace", skip_all)]
@@ -84,8 +86,10 @@ impl Backend {
         let temp_directory = temp_directory.path().to_path_buf();
 
         // Create a temporary file for the proof
-        let proof_with_public_inputs =
-            bb_abstraction_leaks::prepend_public_inputs(proof.to_vec(), public_inputs);
+        // This is coupled with Barretenberg
+        /*let proof_with_public_inputs =
+        bb_abstraction_leaks::prepend_public_inputs(proof.to_vec(), public_inputs);*/
+        let proof_with_public_inputs = proof.to_vec();
         let proof_path = temp_directory.join("proof").with_extension("proof");
         write_to_file(&proof_with_public_inputs, &proof_path);
 
@@ -97,7 +101,6 @@ impl Backend {
         // Create the verification key and write it to the specified path
         let vk_path = temp_directory.join("vk");
 
-        println!("Estamos en la verificacion");
 
         WriteVkCommand {
             crs_path: self.crs_directory(),
