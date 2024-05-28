@@ -1,52 +1,37 @@
-#![allow(unused)]
 use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
 };
 
-use crate::hir::def_map::CrateDefMap;
 use crate::{
-    ast::{
-        ArrayLiteral, ConstructorExpression, FunctionKind, IfExpression, InfixExpression, Lambda,
-        UnresolvedTraitConstraint, UnresolvedTypeExpression,
-    },
+    ast::{FunctionKind, UnresolvedTraitConstraint},
     hir::{
-        def_collector::dc_crate::CompilationError,
+        def_collector::{
+            dc_crate::{
+                filter_literal_globals, CompilationError, ImplMap, UnresolvedGlobal,
+                UnresolvedStruct, UnresolvedTypeAlias,
+            },
+            errors::DuplicateType,
+        },
         resolution::{errors::ResolverError, path_resolver::PathResolver, resolver::LambdaContext},
         scope::ScopeForest as GenericScopeForest,
         type_check::TypeCheckError,
     },
-    hir_def::{
-        expr::{
-            HirArrayLiteral, HirBinaryOp, HirBlockExpression, HirCallExpression, HirCastExpression,
-            HirConstructorExpression, HirIdent, HirIfExpression, HirIndexExpression,
-            HirInfixExpression, HirLambda, HirMemberAccess, HirMethodCallExpression,
-            HirMethodReference, HirPrefixExpression,
-        },
-        traits::TraitConstraint,
-    },
+    hir_def::{expr::HirIdent, function::Parameters, traits::TraitConstraint},
     macros_api::{
-        BlockExpression, CallExpression, CastExpression, Expression, ExpressionKind, HirExpression,
-        HirLiteral, HirStatement, Ident, IndexExpression, Literal, MemberAccessExpression,
-        MethodCallExpression, NodeInterner, NoirFunction, PrefixExpression, Statement,
-        StatementKind, StructId,
+        Ident, NodeInterner, NoirFunction, NoirStruct, Pattern, SecondaryAttribute, StructId,
     },
-    node_interner::{DefinitionKind, DependencyId, ExprId, FuncId, StmtId, TraitId},
-    Shared, StructType, Type, TypeVariable,
+    node_interner::{DefinitionKind, DependencyId, ExprId, FuncId, TraitId, TypeAliasId},
+    Shared, Type, TypeVariable,
 };
 use crate::{
     ast::{TraitBound, UnresolvedGenerics},
     graph::CrateId,
     hir::{
-        def_collector::{
-            dc_crate::{CollectedItems, DefCollector},
-            errors::DefCollectorErrorKind,
-        },
+        def_collector::{dc_crate::CollectedItems, errors::DefCollectorErrorKind},
         def_map::{LocalModuleId, ModuleDefId, ModuleId, MAIN_FUNCTION},
         resolution::{
-            errors::PubPosition,
-            import::{PathResolution, PathResolutionError},
-            path_resolver::StandardPathResolver,
+            errors::PubPosition, import::PathResolution, path_resolver::StandardPathResolver,
         },
         Context,
     },
@@ -56,17 +41,25 @@ use crate::{
     token::FunctionAttribute,
     Generics,
 };
+use crate::{
+    hir::{
+        def_collector::dc_crate::{UnresolvedFunctions, UnresolvedTraitImpl},
+        def_map::{CrateDefMap, ModuleData},
+    },
+    hir_def::traits::TraitImpl,
+    macros_api::ItemVisibility,
+};
 
 mod expressions;
 mod patterns;
 mod scope;
 mod statements;
+mod traits;
 mod types;
 
 use fm::FileId;
 use iter_extended::vecmap;
 use noirc_errors::{Location, Span};
-use regex::Regex;
 use rustc_hash::FxHashSet as HashSet;
 
 /// ResolverMetas are tagged onto each definition to track how many times they are used
@@ -86,7 +79,7 @@ pub struct Elaborator<'context> {
 
     interner: &'context mut NodeInterner,
 
-    def_maps: &'context BTreeMap<CrateId, CrateDefMap>,
+    def_maps: &'context mut BTreeMap<CrateId, CrateDefMap>,
 
     file: FileId,
 
@@ -168,7 +161,7 @@ impl<'context> Elaborator<'context> {
             scopes: ScopeForest::default(),
             errors: Vec::new(),
             interner: &mut context.def_interner,
-            def_maps: &context.def_maps,
+            def_maps: &mut context.def_maps,
             file: FileId::dummy(),
             in_unconstrained_fn: false,
             nested_loops: 0,
@@ -192,51 +185,85 @@ impl<'context> Elaborator<'context> {
     pub fn elaborate(
         context: &'context mut Context,
         crate_id: CrateId,
-        items: CollectedItems,
+        mut items: CollectedItems,
     ) -> Vec<(CompilationError, FileId)> {
         let mut this = Self::new(context, crate_id);
 
-        // the resolver filters literal globals first
-        for global in items.globals {}
+        // We must first resolve and intern the globals before we can resolve any stmts inside each function.
+        // Each function uses its own resolver with a newly created ScopeForest, and must be resolved again to be within a function's scope
+        //
+        // Additionally, we must resolve integer globals before structs since structs may refer to
+        // the values of integer globals as numeric generics.
+        let (literal_globals, non_literal_globals) = filter_literal_globals(items.globals);
 
-        for alias in items.type_aliases {}
-
-        for trait_ in items.traits {}
-
-        for struct_ in items.types {}
-
-        for trait_impl in &items.trait_impls {
-            // only collect now
+        for global in literal_globals {
+            this.elaborate_global(global);
         }
 
-        for impl_ in &items.impls {
-            // only collect now
+        for (alias_id, alias) in items.type_aliases {
+            this.define_type_alias(alias_id, alias);
         }
 
-        // resolver resolves non-literal globals here
+        this.define_function_metas(&mut items.functions, &mut items.impls, &mut items.trait_impls);
+
+        this.collect_traits(items.traits);
+
+        // Must resolve structs before we resolve globals.
+        this.collect_struct_definitions(items.types);
+
+        // Bind trait impls to their trait. Collect trait functions, that have a
+        // default implementation, which hasn't been overridden.
+        for trait_impl in &mut items.trait_impls {
+            this.collect_trait_impl(trait_impl);
+        }
+
+        // Before we resolve any function symbols we must go through our impls and
+        // re-collect the methods within into their proper module. This cannot be
+        // done during def collection since we need to be able to resolve the type of
+        // the impl since that determines the module we should collect into.
+        //
+        // These are resolved after trait impls so that struct methods are chosen
+        // over trait methods if there are name conflicts.
+        for ((typ, module), impls) in &items.impls {
+            this.collect_impls(typ, *module, impls);
+        }
+
+        // We must wait to resolve non-literal globals until after we resolve structs since struct
+        // globals will need to reference the struct type they're initialized to to ensure they are valid.
+        for global in non_literal_globals {
+            this.elaborate_global(global);
+        }
 
         for functions in items.functions {
-            this.file = functions.file_id;
-            this.trait_id = functions.trait_id; // TODO: Resolve?
-            for (local_module, id, func) in functions.functions {
-                this.local_module = local_module;
-                this.elaborate_function(func, id);
-            }
+            this.elaborate_functions(functions);
         }
 
-        for impl_ in items.impls {}
+        for ((typ, module), impls) in items.impls {
+            this.elaborate_impls(typ, module, impls);
+        }
 
-        for trait_impl in items.trait_impls {}
+        for trait_impl in items.trait_impls {
+            this.elaborate_trait_impl(trait_impl);
+        }
 
         let cycle_errors = this.interner.check_for_dependency_cycles();
         this.errors.extend(cycle_errors);
-
         this.errors
+    }
+
+    fn elaborate_functions(&mut self, functions: UnresolvedFunctions) {
+        self.file = functions.file_id;
+        self.trait_id = functions.trait_id; // TODO: Resolve?
+        for (local_module, id, func) in functions.functions {
+            self.local_module = local_module;
+            let generics_count = self.generics.len();
+            self.elaborate_function(func, id);
+            self.generics.truncate(generics_count);
+        }
     }
 
     fn elaborate_function(&mut self, mut function: NoirFunction, id: FuncId) {
         self.current_function = Some(id);
-        self.resolve_where_clause(&mut function.def.where_clause);
 
         // Without this, impl methods can accidentally be placed in contracts. See #3254
         if self.self_type.is_some() {
@@ -248,9 +275,6 @@ impl<'context> Elaborator<'context> {
 
         // Check whether the function has globals in the local module and add them to the scope
         self.resolve_local_globals();
-        self.add_generics(&function.def.generics);
-
-        self.desugar_impl_trait_args(&mut function, id);
         self.trait_bounds = function.def.where_clause.clone();
 
         let is_low_level_or_oracle = function
@@ -263,8 +287,19 @@ impl<'context> Elaborator<'context> {
             self.in_unconstrained_fn = true;
         }
 
-        let func_meta = self.extract_meta(&function, id);
+        let func_meta = self.interner.func_meta.get(&id);
+        let func_meta = func_meta
+            .expect("FuncMetas should be declared before a function is elaborated")
+            .clone();
 
+        for (parameter, param2) in function.def.parameters.iter().zip(&func_meta.parameters.0) {
+            let definition_kind = DefinitionKind::Local(None);
+            self.elaborate_pattern(parameter.pattern.clone(), param2.1.clone(), definition_kind);
+        }
+
+        self.add_generics(&function.def.generics);
+        self.desugar_impl_trait_args(&mut function, id);
+        self.declare_numeric_generics(&func_meta.parameters, func_meta.return_type());
         self.add_trait_constraints_to_scope(&func_meta);
 
         let (hir_func, body_type) = match function.kind {
@@ -295,8 +330,15 @@ impl<'context> Elaborator<'context> {
         }
 
         // Verify any remaining trait constraints arising from the function body
-        for (constraint, expr_id) in std::mem::take(&mut self.trait_constraints) {
+        for (mut constraint, expr_id) in std::mem::take(&mut self.trait_constraints) {
             let span = self.interner.expr_span(&expr_id);
+
+            if matches!(&constraint.typ, Type::MutableReference(_)) {
+                let (_, dereferenced_typ) =
+                    self.insert_auto_dereferences(expr_id, constraint.typ.clone());
+                constraint.typ = dereferenced_typ;
+            }
+
             self.verify_trait_constraint(
                 &constraint.typ,
                 constraint.trait_id,
@@ -320,7 +362,6 @@ impl<'context> Elaborator<'context> {
 
         self.trait_bounds.clear();
 
-        self.interner.push_fn_meta(func_meta, id);
         self.interner.update_fn(id, hir_func);
         self.current_function = None;
     }
@@ -482,9 +523,23 @@ impl<'context> Elaborator<'context> {
 
     /// Extract metadata from a NoirFunction
     /// to be used in analysis and intern the function parameters
-    /// Prerequisite: self.add_generics() has already been called with the given
-    /// function's generics, including any generics from the impl, if any.
-    fn extract_meta(&mut self, func: &NoirFunction, func_id: FuncId) -> FuncMeta {
+    /// Prerequisite: any implicit generics, including any generics from the impl,
+    /// have already been added to scope via `self.add_generics`.
+    fn define_function_meta(&mut self, func: &mut NoirFunction, func_id: FuncId) {
+        self.current_function = Some(func_id);
+        self.resolve_where_clause(&mut func.def.where_clause);
+
+        // Without this, impl methods can accidentally be placed in contracts. See #3254
+        if self.self_type.is_some() {
+            self.in_contract = false;
+        }
+
+        self.scopes.start_function();
+        self.current_item = Some(DependencyId::Function(func_id));
+
+        // Check whether the function has globals in the local module and add them to the scope
+        self.resolve_local_globals();
+
         let location = Location::new(func.name_ident().span(), self.file);
         let id = self.interner.function_definition_id(func_id);
         let name_ident = HirIdent::non_trait_method(id, location);
@@ -508,6 +563,8 @@ impl<'context> Elaborator<'context> {
         // indicate we should code generate in the same way. Thus, we unify the attributes into one flag here.
         let has_inline_attribute = has_no_predicates_attribute || should_fold;
         let is_entry_point = self.is_entry_point_function(func);
+
+        self.add_generics(&func.def.generics);
 
         let mut generics = vecmap(&self.generics, |(_, typevar, _)| typevar.clone());
         let mut parameters = vec![];
@@ -536,8 +593,6 @@ impl<'context> Elaborator<'context> {
         }
 
         let return_type = Box::new(self.resolve_type(func.return_type()));
-
-        self.declare_numeric_generics(&parameter_types, &return_type);
 
         if !self.pub_allowed(func) && func.def.return_visibility == Visibility::Public {
             self.push_err(ResolverError::UnnecessaryPub {
@@ -591,7 +646,7 @@ impl<'context> Elaborator<'context> {
             .map(|(name, typevar, _span)| (name.clone(), typevar.clone()))
             .collect();
 
-        FuncMeta {
+        let meta = FuncMeta {
             name: name_ident,
             kind: func.kind,
             location,
@@ -605,7 +660,12 @@ impl<'context> Elaborator<'context> {
             trait_constraints: self.resolve_trait_constraints(&func.def.where_clause),
             is_entry_point,
             has_inline_attribute,
-        }
+        };
+
+        self.interner.push_fn_meta(meta, func_id);
+        self.current_function = None;
+        self.scopes.end_function();
+        self.current_item = None;
     }
 
     /// Only sized types are valid to be used as main's parameters or the parameters to a contract
@@ -645,7 +705,7 @@ impl<'context> Elaborator<'context> {
         }
     }
 
-    fn declare_numeric_generics(&mut self, params: &[Type], return_type: &Type) {
+    fn declare_numeric_generics(&mut self, params: &Parameters, return_type: &Type) {
         if self.generics.is_empty() {
             return;
         }
@@ -668,11 +728,11 @@ impl<'context> Elaborator<'context> {
     }
 
     fn find_numeric_generics(
-        parameters: &[Type],
+        parameters: &Parameters,
         return_type: &Type,
     ) -> Vec<(String, TypeVariable)> {
         let mut found = BTreeMap::new();
-        for parameter in parameters {
+        for (_, parameter, _) in &parameters.0 {
             Self::find_numeric_generics_in_type(parameter, &mut found);
         }
         Self::find_numeric_generics_in_type(return_type, &mut found);
@@ -777,6 +837,463 @@ impl<'context> Elaborator<'context> {
                     });
                 }
             }
+        }
+    }
+
+    fn elaborate_impls(
+        &mut self,
+        typ: UnresolvedType,
+        module: LocalModuleId,
+        impls: Vec<(Vec<Ident>, Span, UnresolvedFunctions)>,
+    ) {
+        self.local_module = module;
+
+        for (generics, _, functions) in impls {
+            self.file = functions.file_id;
+            let old_generics_length = self.generics.len();
+            self.add_generics(&generics);
+            let self_type = self.resolve_type(typ.clone());
+            self.self_type = Some(self_type.clone());
+
+            let function_ids = vecmap(&functions.functions, |(_, id, _)| *id);
+            self.elaborate_functions(functions);
+
+            if self_type != Type::Error {
+                for method_id in function_ids {
+                    let method_name = self.interner.function_name(&method_id).to_owned();
+
+                    if let Some(first_fn) =
+                        self.interner.add_method(&self_type, method_name.clone(), method_id, false)
+                    {
+                        let error = ResolverError::DuplicateDefinition {
+                            name: method_name,
+                            first_span: self.interner.function_ident(&first_fn).span(),
+                            second_span: self.interner.function_ident(&method_id).span(),
+                        };
+                        self.push_err(error);
+                    }
+                }
+            }
+
+            self.generics.truncate(old_generics_length);
+        }
+    }
+
+    fn elaborate_trait_impl(&mut self, trait_impl: UnresolvedTraitImpl) {
+        self.file = trait_impl.file_id;
+        self.local_module = trait_impl.module_id;
+
+        let unresolved_type = trait_impl.object_type;
+        let self_type_span = unresolved_type.span;
+        let old_generics_length = self.generics.len();
+        self.add_generics(&trait_impl.generics);
+
+        let trait_generics =
+            vecmap(&trait_impl.trait_generics, |generic| self.resolve_type(generic.clone()));
+
+        let self_type = trait_impl.resolved_object_type.unwrap_or(Type::Error);
+        let impl_id =
+            trait_impl.impl_id.expect("An impls' id should be set during define_function_metas");
+
+        self.self_type = Some(self_type.clone());
+        self.current_trait_impl = trait_impl.impl_id;
+
+        let methods = trait_impl.methods.function_ids();
+
+        self.elaborate_functions(trait_impl.methods);
+
+        if matches!(self_type, Type::MutableReference(_)) {
+            let span = self_type_span.unwrap_or_else(|| trait_impl.trait_path.span());
+            self.push_err(DefCollectorErrorKind::MutableReferenceInTraitImpl { span });
+        }
+
+        if let Some(trait_id) = trait_impl.trait_id {
+            for func_id in &methods {
+                self.interner.set_function_trait(*func_id, self_type.clone(), trait_id);
+            }
+
+            let where_clause = trait_impl
+                .where_clause
+                .into_iter()
+                .flat_map(|item| self.resolve_trait_constraint(item))
+                .collect();
+
+            let resolved_trait_impl = Shared::new(TraitImpl {
+                ident: trait_impl.trait_path.last_segment().clone(),
+                typ: self_type.clone(),
+                trait_id,
+                trait_generics: trait_generics.clone(),
+                file: trait_impl.file_id,
+                where_clause,
+                methods,
+            });
+
+            let generics = vecmap(&self.generics, |(_, type_variable, _)| type_variable.clone());
+
+            if let Err((prev_span, prev_file)) = self.interner.add_trait_implementation(
+                self_type.clone(),
+                trait_id,
+                trait_generics,
+                impl_id,
+                generics,
+                resolved_trait_impl,
+            ) {
+                self.push_err(DefCollectorErrorKind::OverlappingImpl {
+                    typ: self_type.clone(),
+                    span: self_type_span.unwrap_or_else(|| trait_impl.trait_path.span()),
+                });
+
+                // The 'previous impl defined here' note must be a separate error currently
+                // since it may be in a different file and all errors have the same file id.
+                self.file = prev_file;
+                self.push_err(DefCollectorErrorKind::OverlappingImplNote { span: prev_span });
+                self.file = trait_impl.file_id;
+            }
+        }
+
+        self.self_type = None;
+        self.current_trait_impl = None;
+        self.generics.truncate(old_generics_length);
+    }
+
+    fn collect_impls(
+        &mut self,
+        self_type: &UnresolvedType,
+        module: LocalModuleId,
+        impls: &[(Vec<Ident>, Span, UnresolvedFunctions)],
+    ) {
+        self.local_module = module;
+
+        for (generics, span, unresolved) in impls {
+            self.file = unresolved.file_id;
+            self.declare_method_on_struct(self_type, generics, false, unresolved, *span);
+        }
+    }
+
+    fn collect_trait_impl(&mut self, trait_impl: &mut UnresolvedTraitImpl) {
+        self.local_module = trait_impl.module_id;
+        self.file = trait_impl.file_id;
+        trait_impl.trait_id = self.resolve_trait_by_path(trait_impl.trait_path.clone());
+
+        if let Some(trait_id) = trait_impl.trait_id {
+            self.collect_trait_impl_methods(trait_id, trait_impl);
+
+            let span = trait_impl.object_type.span.expect("All trait self types should have spans");
+            let object_type = &trait_impl.object_type;
+            let generics = &trait_impl.generics;
+            self.declare_method_on_struct(object_type, generics, true, &trait_impl.methods, span);
+        }
+    }
+
+    fn get_module_mut(&mut self, module: ModuleId) -> &mut ModuleData {
+        let message = "A crate should always be present for a given crate id";
+        &mut self.def_maps.get_mut(&module.krate).expect(message).modules[module.local_id.0]
+    }
+
+    fn declare_method_on_struct(
+        &mut self,
+        self_type: &UnresolvedType,
+        generics: &UnresolvedGenerics,
+        is_trait_impl: bool,
+        functions: &UnresolvedFunctions,
+        span: Span,
+    ) {
+        let generic_count = self.generics.len();
+        self.add_generics(generics);
+        let typ = self.resolve_type(self_type.clone());
+
+        if let Type::Struct(struct_type, _generics) = typ {
+            let struct_type = struct_type.borrow();
+
+            // `impl`s are only allowed on types defined within the current crate
+            if !is_trait_impl && struct_type.id.krate() != self.crate_id {
+                let type_name = struct_type.name.to_string();
+                self.push_err(DefCollectorErrorKind::ForeignImpl { span, type_name });
+                self.generics.truncate(generic_count);
+                return;
+            }
+
+            // Grab the module defined by the struct type. Note that impls are a case
+            // where the module the methods are added to is not the same as the module
+            // they are resolved in.
+            let module = self.get_module_mut(struct_type.id.module_id());
+
+            for (_, method_id, method) in &functions.functions {
+                // If this method was already declared, remove it from the module so it cannot
+                // be accessed with the `TypeName::method` syntax. We'll check later whether the
+                // object types in each method overlap or not. If they do, we issue an error.
+                // If not, that is specialization which is allowed.
+                let name = method.name_ident().clone();
+                if module.declare_function(name, ItemVisibility::Public, *method_id).is_err() {
+                    module.remove_function(method.name_ident());
+                }
+            }
+        // Prohibit defining impls for primitive types if we're not in the stdlib
+        } else if !is_trait_impl && typ != Type::Error && !self.crate_id.is_stdlib() {
+            self.push_err(DefCollectorErrorKind::NonStructTypeInImpl { span });
+        }
+        self.generics.truncate(generic_count);
+    }
+
+    fn collect_trait_impl_methods(
+        &mut self,
+        trait_id: TraitId,
+        trait_impl: &mut UnresolvedTraitImpl,
+    ) {
+        self.local_module = trait_impl.module_id;
+        self.file = trait_impl.file_id;
+
+        // In this Vec methods[i] corresponds to trait.methods[i]. If the impl has no implementation
+        // for a particular method, the default implementation will be added at that slot.
+        let mut ordered_methods = Vec::new();
+
+        // check whether the trait implementation is in the same crate as either the trait or the type
+        self.check_trait_impl_crate_coherence(trait_id, trait_impl);
+
+        // set of function ids that have a corresponding method in the trait
+        let mut func_ids_in_trait = HashSet::default();
+
+        // Temporarily take ownership of the trait's methods so we can iterate over them
+        // while also mutating the interner
+        let the_trait = self.interner.get_trait_mut(trait_id);
+        let methods = std::mem::take(&mut the_trait.methods);
+
+        for method in &methods {
+            let overrides: Vec<_> = trait_impl
+                .methods
+                .functions
+                .iter()
+                .filter(|(_, _, f)| f.name() == method.name.0.contents)
+                .collect();
+
+            if overrides.is_empty() {
+                if let Some(default_impl) = &method.default_impl {
+                    // copy 'where' clause from unresolved trait impl
+                    let mut default_impl_clone = default_impl.clone();
+                    default_impl_clone.def.where_clause.extend(trait_impl.where_clause.clone());
+
+                    let func_id = self.interner.push_empty_fn();
+                    let module = self.module_id();
+                    let location = Location::new(default_impl.def.span, trait_impl.file_id);
+                    self.interner.push_function(func_id, &default_impl.def, module, location);
+                    func_ids_in_trait.insert(func_id);
+                    ordered_methods.push((
+                        method.default_impl_module_id,
+                        func_id,
+                        *default_impl_clone,
+                    ));
+                } else {
+                    self.push_err(DefCollectorErrorKind::TraitMissingMethod {
+                        trait_name: self.interner.get_trait(trait_id).name.clone(),
+                        method_name: method.name.clone(),
+                        trait_impl_span: trait_impl
+                            .object_type
+                            .span
+                            .expect("type must have a span"),
+                    });
+                }
+            } else {
+                for (_, func_id, _) in &overrides {
+                    func_ids_in_trait.insert(*func_id);
+                }
+
+                if overrides.len() > 1 {
+                    self.push_err(DefCollectorErrorKind::Duplicate {
+                        typ: DuplicateType::TraitAssociatedFunction,
+                        first_def: overrides[0].2.name_ident().clone(),
+                        second_def: overrides[1].2.name_ident().clone(),
+                    });
+                }
+
+                ordered_methods.push(overrides[0].clone());
+            }
+        }
+
+        // Restore the methods that were taken before the for loop
+        let the_trait = self.interner.get_trait_mut(trait_id);
+        the_trait.set_methods(methods);
+
+        // Emit MethodNotInTrait error for methods in the impl block that
+        // don't have a corresponding method signature defined in the trait
+        for (_, func_id, func) in &trait_impl.methods.functions {
+            if !func_ids_in_trait.contains(func_id) {
+                let trait_name = the_trait.name.clone();
+                let impl_method = func.name_ident().clone();
+                let error = DefCollectorErrorKind::MethodNotInTrait { trait_name, impl_method };
+                self.errors.push((error.into(), self.file));
+            }
+        }
+
+        trait_impl.methods.functions = ordered_methods;
+        trait_impl.methods.trait_id = Some(trait_id);
+    }
+
+    fn check_trait_impl_crate_coherence(
+        &mut self,
+        trait_id: TraitId,
+        trait_impl: &UnresolvedTraitImpl,
+    ) {
+        self.local_module = trait_impl.module_id;
+        self.file = trait_impl.file_id;
+
+        let object_crate = match self.resolve_type(trait_impl.object_type.clone()) {
+            Type::Struct(struct_type, _) => struct_type.borrow().id.krate(),
+            _ => CrateId::Dummy,
+        };
+
+        let the_trait = self.interner.get_trait(trait_id);
+        if self.crate_id != the_trait.crate_id && self.crate_id != object_crate {
+            self.push_err(DefCollectorErrorKind::TraitImplOrphaned {
+                span: trait_impl.object_type.span.expect("object type must have a span"),
+            });
+        }
+    }
+
+    fn define_type_alias(&mut self, alias_id: TypeAliasId, alias: UnresolvedTypeAlias) {
+        self.file = alias.file_id;
+        self.local_module = alias.module_id;
+
+        let generics = self.add_generics(&alias.type_alias_def.generics);
+        self.resolve_local_globals();
+        self.current_item = Some(DependencyId::Alias(alias_id));
+        let typ = self.resolve_type(alias.type_alias_def.typ);
+        self.interner.set_type_alias(alias_id, typ, generics);
+    }
+
+    fn collect_struct_definitions(&mut self, structs: BTreeMap<StructId, UnresolvedStruct>) {
+        // This is necessary to avoid cloning the entire struct map
+        // when adding checks after each struct field is resolved.
+        let struct_ids = structs.keys().copied().collect::<Vec<_>>();
+
+        // Resolve each field in each struct.
+        // Each struct should already be present in the NodeInterner after def collection.
+        for (type_id, typ) in structs {
+            self.file = typ.file_id;
+            self.local_module = typ.module_id;
+            let (generics, fields) = self.resolve_struct_fields(typ.struct_def, type_id);
+
+            self.interner.update_struct(type_id, |struct_def| {
+                struct_def.set_fields(fields);
+                struct_def.generics = generics;
+            });
+        }
+
+        // Check whether the struct fields have nested slices
+        // We need to check after all structs are resolved to
+        // make sure every struct's fields is accurately set.
+        for id in struct_ids {
+            let struct_type = self.interner.get_struct(id);
+            // Only handle structs without generics as any generics args will be checked
+            // after monomorphization when performing SSA codegen
+            if struct_type.borrow().generics.is_empty() {
+                let fields = struct_type.borrow().get_fields(&[]);
+                for (_, field_type) in fields.iter() {
+                    if field_type.is_nested_slice() {
+                        let location = struct_type.borrow().location;
+                        self.file = location.file;
+                        self.push_err(ResolverError::NestedSlices { span: location.span });
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn resolve_struct_fields(
+        &mut self,
+        unresolved: NoirStruct,
+        struct_id: StructId,
+    ) -> (Generics, Vec<(Ident, Type)>) {
+        let generics = self.add_generics(&unresolved.generics);
+
+        // Check whether the struct definition has globals in the local module and add them to the scope
+        self.resolve_local_globals();
+
+        self.current_item = Some(DependencyId::Struct(struct_id));
+
+        self.resolving_ids.insert(struct_id);
+        let fields = vecmap(unresolved.fields, |(ident, typ)| (ident, self.resolve_type(typ)));
+        self.resolving_ids.remove(&struct_id);
+
+        (generics, fields)
+    }
+
+    fn elaborate_global(&mut self, global: UnresolvedGlobal) {
+        self.local_module = global.module_id;
+        self.file = global.file_id;
+
+        let global_id = global.global_id;
+        self.current_item = Some(DependencyId::Global(global_id));
+
+        let definition_kind = DefinitionKind::Global(global_id);
+        let let_stmt = global.stmt_def;
+
+        if !self.in_contract
+            && let_stmt.attributes.iter().any(|attr| matches!(attr, SecondaryAttribute::Abi(_)))
+        {
+            let span = let_stmt.pattern.span();
+            self.push_err(ResolverError::AbiAttributeOutsideContract { span });
+        }
+
+        if !let_stmt.comptime && matches!(let_stmt.pattern, Pattern::Mutable(..)) {
+            let span = let_stmt.pattern.span();
+            self.push_err(ResolverError::MutableGlobal { span });
+        }
+
+        let (let_statement, _typ) = self.elaborate_let(let_stmt);
+
+        let statement_id = self.interner.get_global(global_id).let_statement;
+        self.interner.get_global_definition_mut(global_id).kind = definition_kind;
+        self.interner.replace_statement(statement_id, let_statement);
+    }
+
+    fn define_function_metas(
+        &mut self,
+        functions: &mut [UnresolvedFunctions],
+        impls: &mut ImplMap,
+        trait_impls: &mut [UnresolvedTraitImpl],
+    ) {
+        for function_set in functions {
+            self.define_function_metas_for_functions(function_set);
+        }
+
+        for ((_typ, local_module), function_sets) in impls {
+            self.local_module = *local_module;
+
+            for (_generics, _, function_set) in function_sets {
+                self.define_function_metas_for_functions(function_set);
+            }
+        }
+
+        for trait_impl in trait_impls {
+            self.file = trait_impl.file_id;
+            self.local_module = trait_impl.module_id;
+
+            let unresolved_type = &trait_impl.object_type;
+            let old_generics_length = self.generics.len();
+            self.add_generics(&trait_impl.generics);
+
+            let self_type = self.resolve_type(unresolved_type.clone());
+            self.self_type = Some(self_type.clone());
+
+            let impl_id = self.interner.next_trait_impl_id();
+            self.current_trait_impl = Some(impl_id);
+
+            self.define_function_metas_for_functions(&mut trait_impl.methods);
+
+            trait_impl.resolved_object_type = self.self_type.take();
+            trait_impl.impl_id = self.current_trait_impl.take();
+            self.generics.truncate(old_generics_length);
+        }
+    }
+
+    fn define_function_metas_for_functions(&mut self, function_set: &mut UnresolvedFunctions) {
+        self.file = function_set.file_id;
+
+        for (local_module, id, func) in &mut function_set.functions {
+            self.local_module = *local_module;
+            let old_generics_length = self.generics.len();
+            self.define_function_meta(func, *id);
+            self.generics.truncate(old_generics_length);
         }
     }
 }

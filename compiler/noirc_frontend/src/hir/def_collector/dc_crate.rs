@@ -5,6 +5,7 @@ use crate::graph::CrateId;
 use crate::hir::comptime::{Interpreter, InterpreterError};
 use crate::hir::def_map::{CrateDefMap, LocalModuleId, ModuleId};
 use crate::hir::resolution::errors::ResolverError;
+use crate::Type;
 
 use crate::hir::resolution::import::{resolve_import, ImportDirective, PathResolution};
 use crate::hir::resolution::{
@@ -18,7 +19,9 @@ use crate::hir::type_check::{
 use crate::hir::Context;
 
 use crate::macros_api::{MacroError, MacroProcessor};
-use crate::node_interner::{FuncId, GlobalId, NodeInterner, StructId, TraitId, TypeAliasId};
+use crate::node_interner::{
+    FuncId, GlobalId, NodeInterner, StructId, TraitId, TraitImplId, TypeAliasId,
+};
 
 use crate::ast::{
     ExpressionKind, Ident, LetStatement, Literal, NoirFunction, NoirStruct, NoirTrait,
@@ -52,6 +55,10 @@ pub struct UnresolvedFunctions {
 impl UnresolvedFunctions {
     pub fn push_fn(&mut self, mod_id: LocalModuleId, func_id: FuncId, func: NoirFunction) {
         self.functions.push((mod_id, func_id, func));
+    }
+
+    pub fn function_ids(&self) -> Vec<FuncId> {
+        vecmap(&self.functions, |(_, id, _)| *id)
     }
 
     pub fn resolve_trait_bounds_trait_ids(
@@ -103,13 +110,17 @@ pub struct UnresolvedTrait {
 pub struct UnresolvedTraitImpl {
     pub file_id: FileId,
     pub module_id: LocalModuleId,
-    pub trait_id: Option<TraitId>,
     pub trait_generics: Vec<UnresolvedType>,
     pub trait_path: Path,
     pub object_type: UnresolvedType,
     pub methods: UnresolvedFunctions,
     pub generics: UnresolvedGenerics,
     pub where_clause: Vec<UnresolvedTraitConstraint>,
+
+    // These fields are filled in later during elaboration
+    pub trait_id: Option<TraitId>,
+    pub impl_id: Option<TraitImplId>,
+    pub resolved_object_type: Option<Type>,
 }
 
 #[derive(Clone)]
@@ -333,7 +344,7 @@ impl DefCollector {
 
         if use_elaborator {
             let mut more_errors = Elaborator::elaborate(context, crate_id, def_collector.items);
-            more_errors.append(&mut errors);
+            errors.append(&mut more_errors);
             return errors;
         }
 
@@ -482,7 +493,7 @@ fn inject_prelude(
 /// Separate the globals Vec into two. The first element in the tuple will be the
 /// literal globals, except for arrays, and the second will be all other globals.
 /// We exclude array literals as they can contain complex types
-fn filter_literal_globals(
+pub fn filter_literal_globals(
     globals: Vec<UnresolvedGlobal>,
 ) -> (Vec<UnresolvedGlobal>, Vec<UnresolvedGlobal>) {
     globals.into_iter().partition(|global| match &global.stmt_def.expression.kind {

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use acvm::acir::native_types::{WitnessMap, WitnessStack};
+use acvm::FieldElement;
 use clap::Args;
 
 use fm::FileManager;
@@ -199,7 +200,7 @@ fn debug_program_and_decode(
     program: CompiledProgram,
     package: &Package,
     prover_name: &str,
-) -> Result<(Option<InputValue>, Option<WitnessMap>), CliError> {
+) -> Result<(Option<InputValue>, Option<WitnessMap<FieldElement>>), CliError> {
     // Parse the initial witness values from Prover.toml
     let (inputs_map, _) =
         read_inputs_from_file(&package.root_dir, prover_name, Format::Toml, &program.abi)?;
@@ -218,7 +219,7 @@ fn debug_program_and_decode(
 pub(crate) fn debug_program(
     compiled_program: &CompiledProgram,
     inputs_map: &InputMap,
-) -> Result<Option<WitnessMap>, CliError> {
+) -> Result<Option<WitnessMap<FieldElement>>, CliError> {
     let blackbox_solver = default_blackbox_solver();
 
     let initial_witness = compiled_program.abi.encode(inputs_map, None)?;
@@ -226,7 +227,6 @@ pub(crate) fn debug_program(
     let debug_artifact = DebugArtifact {
         debug_symbols: compiled_program.debug.clone(),
         file_map: compiled_program.file_map.clone(),
-        warnings: compiled_program.warnings.clone(),
     };
 
     noir_debugger::debug_circuit(
