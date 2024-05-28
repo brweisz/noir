@@ -731,6 +731,8 @@ fn should_check_siblings_for_module(module_path: &Path, parent_path: &Path) -> b
 cfg_if::cfg_if! {
     if #[cfg(feature = "bn254")] {
         pub const CHOSEN_FIELD: &str = "bn254";
+    } else if #[cfg(feature = "goldilocks")] {
+        pub const CHOSEN_FIELD: &str = "goldilocks";
     } else if #[cfg(feature = "bls12_381")] {
         pub const CHOSEN_FIELD: &str = "bls12_381";
     } else {

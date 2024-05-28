@@ -3,9 +3,10 @@
 #![warn(clippy::semicolon_if_nothing_returned)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies, unused_extern_crates))]
 mod generic_ark;
+pub mod fr;
+use fr::GoldilocksFr;
 
 pub use generic_ark::AcirField;
-pub use crate::fr::GoldilocksFr;
 
 /// Temporarily exported generic field to aid migration to `AcirField`
 pub use generic_ark::FieldElement as GenericFieldElement;
