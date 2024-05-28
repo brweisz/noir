@@ -88,3 +88,7 @@ harness = false
 
 [features]
 codegen-docs = ["dep:clap-markdown"]
+
+default = ["goldilocks"]
+goldilocks = []
+bn254 = []

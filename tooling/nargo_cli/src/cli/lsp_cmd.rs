@@ -2,10 +2,10 @@ use async_lsp::{
     concurrency::ConcurrencyLayer, panic::CatchUnwindLayer, server::LifecycleLayer,
     tracing::TracingLayer,
 };
-use acvm::BlackBoxFunctionSolver;
 use clap::Args;
 use noir_lsp::NargoLspService;
 use tower::ServiceBuilder;
+use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 use super::NargoConfig;
 use crate::errors::CliError;
@@ -25,7 +25,7 @@ pub(crate) fn run(_args: LspCommand, _config: NargoConfig) -> Result<(), CliErro
 
     runtime.block_on(async {
         let (server, _) = async_lsp::MainLoop::new_server(|client| {
-            let blackbox_solver = _blackbox_solver();
+            let blackbox_solver = default_blackbox_solver();
             let router = NargoLspService::new(&client, blackbox_solver);
 
             ServiceBuilder::new()
@@ -53,16 +53,4 @@ pub(crate) fn run(_args: LspCommand, _config: NargoConfig) -> Result<(), CliErro
 
         server.run_buffered(stdin, stdout).await.map_err(CliError::LspError)
     })
-}
-
-#[cfg(not(feature = "goldilocks"))]
-fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
-    use bn254_blackbox_solver::Bn254BlackBoxSolver;
-    Bn254BlackBoxSolver::new()
-}
-
-#[cfg(feature = "goldilocks")]
-fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
-    use acvm::blackbox_solver::StubbedBlackBoxSolver;
-    StubbedBlackboxSolver
 }

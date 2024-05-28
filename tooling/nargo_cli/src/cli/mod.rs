@@ -26,6 +26,7 @@ mod new_cmd;
 mod prove_cmd;
 mod test_cmd;
 mod verify_cmd;
+mod default_blackbox_solver;
 
 const GIT_HASH: &str = env!("GIT_COMMIT");
 const IS_DIRTY: &str = env!("GIT_DIRTY");

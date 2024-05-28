@@ -1,5 +1,4 @@
 use acvm::acir::native_types::WitnessStack;
-use acvm::BlackBoxFunctionSolver;
 use clap::Args;
 
 use nargo::artifacts::debug::DebugArtifact;
@@ -15,6 +14,7 @@ use noirc_driver::{
     file_manager_with_stdlib, CompileOptions, CompiledProgram, NOIR_ARTIFACT_VERSION_STRING,
 };
 use noirc_frontend::graph::CrateName;
+use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 use super::fs::{inputs::read_inputs_from_file, witness::save_witness_to_dir};
 use super::NargoConfig;
@@ -127,7 +127,7 @@ pub(crate) fn execute_program(
     inputs_map: &InputMap,
     foreign_call_resolver_url: Option<&str>,
 ) -> Result<WitnessStack, CliError> {
-    let blackbox_solver = _blackbox_solver();
+    let blackbox_solver = default_blackbox_solver();
 
     let initial_witness = compiled_program.abi.encode(inputs_map, None)?;
 
@@ -157,15 +157,4 @@ pub(crate) fn execute_program(
     }
 }
 
-#[cfg(not(feature = "goldilocks"))]
-fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
-    use bn254_blackbox_solver::Bn254BlackBoxSolver;
-    Bn254BlackBoxSolver::new()
-}
-
-#[cfg(feature = "goldilocks")]
-fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
-    use acvm::blackbox_solver::StubbedBlackBoxSolver;
-    StubbedBlackboxSolver
-}
 
