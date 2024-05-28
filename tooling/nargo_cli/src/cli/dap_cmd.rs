@@ -1,5 +1,6 @@
 use acvm::acir::circuit::ExpressionWidth;
 use acvm::acir::native_types::WitnessMap;
+use acvm::BlackBoxFunctionSolver;
 use clap::Args;
 use nargo::constants::PROVER_INPUT_FILE;
 use nargo::workspace::Workspace;
@@ -193,7 +194,7 @@ fn loop_uninitialized_dap<R: Read, W: Write>(
                     Ok((compiled_program, initial_witness)) => {
                         server.respond(req.ack()?)?;
 
-                        let blackbox_solver = bn254_blackbox_solver::Bn254BlackBoxSolver::new();
+                        let blackbox_solver = _blackbox_solver();
 
                         noir_debugger::run_dap_loop(
                             server,
@@ -270,4 +271,16 @@ pub(crate) fn run(args: DapCommand, _config: NargoConfig) -> Result<(), CliError
     let server = Server::new(input, output);
 
     loop_uninitialized_dap(server, args.expression_width).map_err(CliError::DapError)
+}
+
+#[cfg(not(feature = "goldilocks"))]
+fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
+    use bn254_blackbox_solver::Bn254BlackBoxSolver;
+    Bn254BlackBoxSolver::new()
+}
+
+#[cfg(feature = "goldilocks")]
+fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
+    use acvm::blackbox_solver::StubbedBlackBoxSolver;
+    StubbedBlackboxSolver
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use acvm::acir::native_types::{WitnessMap, WitnessStack};
-use bn254_blackbox_solver::Bn254BlackBoxSolver;
+use acvm::BlackBoxFunctionSolver;
 use clap::Args;
 
 use fm::FileManager;
@@ -219,7 +219,7 @@ pub(crate) fn debug_program(
     compiled_program: &CompiledProgram,
     inputs_map: &InputMap,
 ) -> Result<Option<WitnessMap>, CliError> {
-    let blackbox_solver = Bn254BlackBoxSolver::new();
+    let blackbox_solver = _blackbox_solver();
 
     let initial_witness = compiled_program.abi.encode(inputs_map, None)?;
 
@@ -238,3 +238,16 @@ pub(crate) fn debug_program(
     )
     .map_err(CliError::from)
 }
+
+#[cfg(not(feature = "goldilocks"))]
+fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
+    use bn254_blackbox_solver::Bn254BlackBoxSolver;
+    Bn254BlackBoxSolver::new()
+}
+
+#[cfg(feature = "goldilocks")]
+fn _blackbox_solver() -> impl BlackBoxFunctionSolver {
+    use acvm::blackbox_solver::StubbedBlackBoxSolver;
+    StubbedBlackboxSolver
+}
+
