@@ -8,7 +8,7 @@ use acvm::{
 };
 
 /// Trait for converting values into debug-friendly strings.
-trait DebugToString {
+pub(crate) trait DebugToString {
     fn debug_to_string(&self) -> String;
 }
 
@@ -59,8 +59,8 @@ impl DebugToString for BrilligBinaryOp {
             BrilligBinaryOp::UnsignedDiv => "/".into(),
             BrilligBinaryOp::LessThan => "<".into(),
             BrilligBinaryOp::LessThanEquals => "<=".into(),
-            BrilligBinaryOp::And => "&&".into(),
-            BrilligBinaryOp::Or => "||".into(),
+            BrilligBinaryOp::And => "&".into(),
+            BrilligBinaryOp::Or => "|".into(),
             BrilligBinaryOp::Xor => "^".into(),
             BrilligBinaryOp::Shl => "<<".into(),
             BrilligBinaryOp::Shr => ">>".into(),
@@ -169,7 +169,7 @@ impl DebugShow {
     }
 
     /// Stores the value of `constant` in the `result` register
-    pub(crate) fn const_instruction(&self, result: MemoryAddress, constant: FieldElement) {
+    pub(crate) fn const_instruction<F: DebugToString>(&self, result: MemoryAddress, constant: F) {
         debug_println!(self.enable_debug_trace, "  CONST {} = {}", result, constant);
     }
 
@@ -334,7 +334,9 @@ impl DebugShow {
                     outputs
                 );
             }
-            BlackBoxOp::EmbeddedCurveAdd { input1_x, input1_y, input2_x, input2_y, result } => {
+            BlackBoxOp::EmbeddedCurveAdd {
+                input1_x, input1_y, input2_x, input2_y, result, ..
+            } => {
                 debug_println!(
                     self.enable_debug_trace,
                     "  EMBEDDED_CURVE_ADD ({} {}) ({} {}) -> {}",
@@ -343,24 +345,6 @@ impl DebugShow {
                     input2_x,
                     input2_y,
                     result
-                );
-            }
-            BlackBoxOp::PedersenCommitment { inputs, domain_separator, output } => {
-                debug_println!(
-                    self.enable_debug_trace,
-                    "  PEDERSEN {} {} -> {}",
-                    inputs,
-                    domain_separator,
-                    output
-                );
-            }
-            BlackBoxOp::PedersenHash { inputs, domain_separator, output } => {
-                debug_println!(
-                    self.enable_debug_trace,
-                    "  PEDERSEN_HASH {} {} -> {}",
-                    inputs,
-                    domain_separator,
-                    output
                 );
             }
             BlackBoxOp::SchnorrVerify {
@@ -451,6 +435,17 @@ impl DebugShow {
                     output
                 );
             }
+            BlackBoxOp::ToRadix { input, radix, output } => {
+                debug_println!(
+                    self.enable_debug_trace,
+                    "  TO_RADIX {} {} -> {}",
+                    input,
+                    radix,
+                    output
+                );
+            }
+            BlackBoxOp::PedersenCommitment { .. } => todo!("Deprecated Blackbox"),
+            BlackBoxOp::PedersenHash { .. } => todo!("Deprecated Blackbox"),
         }
     }
 

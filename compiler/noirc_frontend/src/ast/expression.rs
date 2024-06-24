@@ -5,10 +5,14 @@ use crate::ast::{
     Ident, ItemVisibility, Path, Pattern, Recoverable, Statement, StatementKind,
     UnresolvedTraitConstraint, UnresolvedType, UnresolvedTypeData, Visibility,
 };
+use crate::macros_api::StructId;
+use crate::node_interner::ExprId;
 use crate::token::{Attributes, Token};
-use acvm::FieldElement;
+use acvm::{acir::AcirField, FieldElement};
 use iter_extended::vecmap;
 use noirc_errors::{Span, Spanned};
+
+use super::UnaryRhsMemberAccess;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ExpressionKind {
@@ -23,12 +27,28 @@ pub enum ExpressionKind {
     Cast(Box<CastExpression>),
     Infix(Box<InfixExpression>),
     If(Box<IfExpression>),
-    Variable(Path),
+    // The optional vec here is the optional list of generics
+    // provided by the turbofish operator, if used
+    Variable(Path, Option<Vec<UnresolvedType>>),
     Tuple(Vec<Expression>),
     Lambda(Box<Lambda>),
     Parenthesized(Box<Expression>),
-    Quote(BlockExpression),
-    Comptime(BlockExpression),
+    Quote(BlockExpression, Span),
+    Unquote(Box<Expression>),
+    Comptime(BlockExpression, Span),
+
+    /// Unquote expressions are replaced with UnquoteMarkers when Quoted
+    /// expressions are resolved. Since the expression being quoted remains an
+    /// ExpressionKind (rather than a resolved ExprId), the UnquoteMarker must be
+    /// here in the AST even though it is technically HIR-only.
+    /// Each usize in an UnquoteMarker is an index which corresponds to the index of the
+    /// expression in the Hir::Quote expression list to replace it with.
+    UnquoteMarker(usize),
+
+    // This variant is only emitted when inlining the result of comptime
+    // code. It is used to translate function values back into the AST while
+    // guaranteeing they have the same instantiated type and definition id without resolving again.
+    Resolved(ExprId),
     Error,
 }
 
@@ -39,7 +59,7 @@ pub type UnresolvedGenerics = Vec<Ident>;
 impl ExpressionKind {
     pub fn into_path(self) -> Option<Path> {
         match self {
-            ExpressionKind::Variable(path) => Some(path),
+            ExpressionKind::Variable(path, _) => Some(path),
             _ => None,
         }
     }
@@ -104,7 +124,11 @@ impl ExpressionKind {
     }
 
     pub fn constructor((type_name, fields): (Path, Vec<(Ident, Expression)>)) -> ExpressionKind {
-        ExpressionKind::Constructor(Box::new(ConstructorExpression { type_name, fields }))
+        ExpressionKind::Constructor(Box::new(ConstructorExpression {
+            type_name,
+            fields,
+            struct_type: None,
+        }))
     }
 
     /// Returns true if the expression is a literal integer
@@ -164,15 +188,20 @@ impl Expression {
 
     pub fn member_access_or_method_call(
         lhs: Expression,
-        (rhs, args): (Ident, Option<Vec<Expression>>),
+        rhs: UnaryRhsMemberAccess,
         span: Span,
     ) -> Expression {
-        let kind = match args {
-            None => ExpressionKind::MemberAccess(Box::new(MemberAccessExpression { lhs, rhs })),
-            Some(arguments) => ExpressionKind::MethodCall(Box::new(MethodCallExpression {
+        let kind = match rhs.method_call {
+            None => {
+                let rhs = rhs.method_or_field;
+                ExpressionKind::MemberAccess(Box::new(MemberAccessExpression { lhs, rhs }))
+            }
+            Some(method_call) => ExpressionKind::MethodCall(Box::new(MethodCallExpression {
                 object: lhs,
-                method_name: rhs,
-                arguments,
+                method_name: rhs.method_or_field,
+                generics: method_call.turbofish,
+                arguments: method_call.args,
+                is_macro_call: method_call.macro_call,
             })),
         };
         Expression::new(kind, span)
@@ -188,7 +217,12 @@ impl Expression {
         Expression::new(kind, span)
     }
 
-    pub fn call(lhs: Expression, arguments: Vec<Expression>, span: Span) -> Expression {
+    pub fn call(
+        lhs: Expression,
+        is_macro_call: bool,
+        arguments: Vec<Expression>,
+        span: Span,
+    ) -> Expression {
         // Need to check if lhs is an if expression since users can sequence if expressions
         // with tuples without calling them. E.g. `if c { t } else { e }(a, b)` is interpreted
         // as a sequence of { if, tuple } rather than a function call. This behavior matches rust.
@@ -206,7 +240,11 @@ impl Expression {
                 ],
             })
         } else {
-            ExpressionKind::Call(Box::new(CallExpression { func: Box::new(lhs), arguments }))
+            ExpressionKind::Call(Box::new(CallExpression {
+                func: Box::new(lhs),
+                is_macro_call,
+                arguments,
+            }))
         };
         Expression::new(kind, span)
     }
@@ -429,19 +467,28 @@ pub enum ArrayLiteral {
 pub struct CallExpression {
     pub func: Box<Expression>,
     pub arguments: Vec<Expression>,
+    pub is_macro_call: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MethodCallExpression {
     pub object: Expression,
     pub method_name: Ident,
+    /// Method calls have an optional list of generics if the turbofish operator was used
+    pub generics: Option<Vec<UnresolvedType>>,
     pub arguments: Vec<Expression>,
+    pub is_macro_call: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ConstructorExpression {
     pub type_name: Path,
     pub fields: Vec<(Ident, Expression)>,
+
+    /// This may be filled out during macro expansion
+    /// so that we can skip re-resolving the type name since it
+    /// would be lost at that point.
+    pub struct_type: Option<StructId>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -494,7 +541,14 @@ impl Display for ExpressionKind {
             Cast(cast) => cast.fmt(f),
             Infix(infix) => infix.fmt(f),
             If(if_expr) => if_expr.fmt(f),
-            Variable(path) => path.fmt(f),
+            Variable(path, generics) => {
+                if let Some(generics) = generics {
+                    let generics = vecmap(generics, ToString::to_string);
+                    write!(f, "{path}::<{}>", generics.join(", "))
+                } else {
+                    path.fmt(f)
+                }
+            }
             Constructor(constructor) => constructor.fmt(f),
             MemberAccess(access) => access.fmt(f),
             Tuple(elements) => {
@@ -503,9 +557,12 @@ impl Display for ExpressionKind {
             }
             Lambda(lambda) => lambda.fmt(f),
             Parenthesized(sub_expr) => write!(f, "({sub_expr})"),
-            Quote(block) => write!(f, "quote {block}"),
-            Comptime(block) => write!(f, "comptime {block}"),
+            Quote(block, _) => write!(f, "quote {block}"),
+            Comptime(block, _) => write!(f, "comptime {block}"),
             Error => write!(f, "Error"),
+            Resolved(_) => write!(f, "?Resolved"),
+            Unquote(expr) => write!(f, "$({expr})"),
+            UnquoteMarker(index) => write!(f, "${index}"),
         }
     }
 }
