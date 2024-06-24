@@ -10,7 +10,6 @@ use acir::BlackBoxFunc;
 use crate::BlackBoxResolutionError;
 
 /// Performs multi scalar multiplication of points with scalars.
-#[cfg(feature = "bn254")]
 pub fn multi_scalar_mul(
     points: &[FieldElement],
     scalars_lo: &[FieldElement],
@@ -75,7 +74,6 @@ pub fn multi_scalar_mul(
     }
 }
 
-#[cfg(feature = "bn254")]
 pub fn embedded_curve_add(
     input1: [FieldElement; 3],
     input2: [FieldElement; 3],
@@ -101,7 +99,6 @@ pub fn embedded_curve_add(
     }
 }
 
-#[cfg(feature = "bn254")]
 fn create_point(
     x: FieldElement,
     y: FieldElement,
@@ -121,7 +118,6 @@ fn create_point(
 }
 
 #[cfg(test)]
-#[cfg(feature = "bn254")]
 mod tests {
     use super::*;
 

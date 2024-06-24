@@ -5,14 +5,18 @@
 
 mod field_element;
 mod generic_ark;
+mod fr;
 
 pub use generic_ark::AcirField;
 
 /// Temporarily exported generic field to aid migration to `AcirField`
 pub use field_element::FieldElement as GenericFieldElement;
+use crate::fr::GoldilocksFr;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "bls12_381")] {
+    if #[cfg(feature = "goldilocks")] {
+        pub type FieldElement = field_element::FieldElement<GoldilocksFr>;
+    } else if #[cfg(feature = "bls12_381")] {
         pub type FieldElement = field_element::FieldElement<ark_bls12_381::Fr>;
     } else {
         pub type FieldElement = field_element::FieldElement<ark_bn254::Fr>;
