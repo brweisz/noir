@@ -34,7 +34,7 @@ impl ProveCommand {
 
         let output = command.output()?;
         if output.status.success() {
-            println!("{}", string_from_stderr(&output.stderr));
+            // println!("{}", string_from_stderr(&output.stderr));
             Ok(output.stdout)
         } else {
             Err(BackendError::CommandFailed(string_from_stderr(&output.stderr)))
