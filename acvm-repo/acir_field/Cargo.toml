@@ -27,6 +27,7 @@ cfg-if = "1.0.0"
 proptest.workspace = true
 
 [features]
+default = ["goldilocks"]
 goldilocks = []
 bn254 = []
 bls12_381 = ["dep:ark-bls12-381"]
