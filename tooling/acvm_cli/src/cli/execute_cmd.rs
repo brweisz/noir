@@ -73,7 +73,7 @@ pub(crate) fn execute_program_from_witness(
     execute_program(
         &program,
         inputs_map,
-        &Bn254BlackBoxSolver,
+        &default_blackbox_solver(),
         &mut DefaultForeignCallExecutor::new(true, foreign_call_resolver_url),
     )
     .map_err(CliError::CircuitExecutionError)

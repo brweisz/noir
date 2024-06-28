@@ -20,7 +20,6 @@ mod init_cmd;
 mod lsp_cmd;
 mod new_cmd;
 mod test_cmd;
-mod default_blackbox_solver;
 
 const GIT_HASH: &str = env!("GIT_COMMIT");
 const IS_DIRTY: &str = env!("GIT_DIRTY");

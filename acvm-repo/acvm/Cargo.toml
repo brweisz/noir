@@ -43,3 +43,5 @@ bls12_381 = [
 
 [dev-dependencies]
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = ["curve"] }
+bn254_blackbox_solver = { version = "0.47.0"}
+

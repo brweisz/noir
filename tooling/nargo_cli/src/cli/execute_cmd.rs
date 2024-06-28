@@ -1,5 +1,5 @@
 use acvm::acir::native_types::WitnessStack;
-use acvm::FieldElement;
+use acir_field::FieldElement;
 use clap::Args;
 
 use nargo::constants::PROVER_INPUT_FILE;

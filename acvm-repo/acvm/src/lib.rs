@@ -5,6 +5,7 @@
 
 pub mod compiler;
 pub mod pwg;
+pub mod default_blackbox_solver;
 
 pub use acvm_blackbox_solver::{BlackBoxFunctionSolver, BlackBoxResolutionError};
 use pwg::OpcodeResolutionError;

@@ -34,7 +34,8 @@ noirc_abi.workspace = true
 noirc_errors.workspace = true
 noir_fuzzer.workspace = true
 noirc_artifacts.workspace = true
-acvm = { workspace = true, features = ["bn254"] }
+acvm = { workspace = true }
+acir_field = { workspace = true, features = ["goldilocks"] }
 bn254_blackbox_solver.workspace = true
 toml.workspace = true
 serde.workspace = true

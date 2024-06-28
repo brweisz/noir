@@ -2497,6 +2497,7 @@ dependencies = [
 name = "nargo_cli"
 version = "0.31.0"
 dependencies = [
+ "acir_field",
  "acvm",
  "assert_cmd",
  "assert_fs",
