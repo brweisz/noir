@@ -1,6 +1,7 @@
 use acvm::acir::native_types::WitnessStack;
 use acir_field::FieldElement;
 use clap::Args;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use nargo::constants::PROVER_INPUT_FILE;
 use nargo::errors::try_to_diagnose_runtime_error;
@@ -12,7 +13,6 @@ use noirc_abi::InputMap;
 use noirc_artifacts::debug::DebugArtifact;
 use noirc_driver::{CompileOptions, CompiledProgram, NOIR_ARTIFACT_VERSION_STRING};
 use noirc_frontend::graph::CrateName;
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 use super::compile_cmd::compile_workspace_full;
 use super::fs::{inputs::read_inputs_from_file, witness::save_witness_to_dir};

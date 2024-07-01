@@ -17,6 +17,7 @@ use dap::responses::ResponseBody;
 use dap::server::Server;
 use dap::types::Capabilities;
 use serde_json::Value;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use super::debug_cmd::compile_bin_package_for_debugging;
 use super::fs::inputs::read_inputs_from_file;
@@ -25,7 +26,6 @@ use crate::errors::CliError;
 use super::NargoConfig;
 
 use noir_debugger::errors::{DapError, LoadError};
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct DapCommand {

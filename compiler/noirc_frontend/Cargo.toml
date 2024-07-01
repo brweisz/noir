@@ -45,3 +45,4 @@ lalrpop = "0.20.2"
 experimental_parser = []
 bn254 = []
 bls12_381 = []
+goldilocks = []

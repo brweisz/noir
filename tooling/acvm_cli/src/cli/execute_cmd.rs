@@ -3,8 +3,8 @@ use std::io::{self, Write};
 use acir::circuit::Program;
 use acir::native_types::{WitnessMap, WitnessStack};
 use acir::FieldElement;
-use bn254_blackbox_solver::Bn254BlackBoxSolver;
 use clap::Args;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use crate::cli::fs::inputs::{read_bytecode_from_file, read_inputs_from_file};
 use crate::errors::CliError;

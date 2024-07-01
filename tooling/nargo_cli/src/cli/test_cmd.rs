@@ -54,7 +54,13 @@ pub(crate) struct TestCommand {
     #[clap(long)]
     oracle_resolver: Option<String>,
 }
-#[cfg(feature = "bn254")]
+
+#[cfg(feature = "goldilocks")]
+pub(crate) fn run(args: TestCommand, config: NargoConfig) -> Result<(), CliError> {
+    todo!();
+}
+
+#[cfg(not(feature = "goldilocks"))]
 pub(crate) fn run(args: TestCommand, config: NargoConfig) -> Result<(), CliError> {
     let toml_path = get_package_manifest(&config.program_dir)?;
     let default_selection =

@@ -5,6 +5,8 @@ use noirc_driver::NOIR_ARTIFACT_VERSION_STRING;
 use std::path::PathBuf;
 
 use color_eyre::eyre;
+use acir_field::FieldElement;
+use acvm::BlackBoxFunctionSolver;
 
 mod fs;
 

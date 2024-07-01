@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use acvm::acir::native_types::{WitnessMap, WitnessStack};
 use acvm::FieldElement;
 use clap::Args;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use fm::FileManager;
 use nargo::constants::PROVER_INPUT_FILE;
@@ -21,7 +22,6 @@ use noirc_driver::{
 use noirc_frontend::debug::DebugInstrumenter;
 use noirc_frontend::graph::CrateName;
 use noirc_frontend::hir::ParsedFiles;
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 use super::fs::{inputs::read_inputs_from_file, witness::save_witness_to_dir};
 use super::NargoConfig;

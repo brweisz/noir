@@ -24,6 +24,8 @@ acvm_blackbox_solver.workspace = true
 
 indexmap = "1.7.0"
 
+bn254_blackbox_solver = { version = "0.47.0", path = "../bn254_blackbox_solver", default-features = false }
+
 [features]
 goldilocks = [
     "acir/goldilocks",
@@ -43,5 +45,4 @@ bls12_381 = [
 
 [dev-dependencies]
 ark-bls12-381 = { version = "^0.4.0", default-features = false, features = ["curve"] }
-bn254_blackbox_solver = { version = "0.47.0"}
 
