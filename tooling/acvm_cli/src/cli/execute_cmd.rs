@@ -2,8 +2,9 @@ use std::io::{self, Write};
 
 use acir::circuit::Program;
 use acir::native_types::{WitnessMap, WitnessStack};
-use bn254_blackbox_solver::Bn254BlackBoxSolver;
+use acir::FieldElement;
 use clap::Args;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use crate::cli::fs::inputs::{read_bytecode_from_file, read_inputs_from_file};
 use crate::errors::CliError;
@@ -63,17 +64,16 @@ pub(crate) fn run(args: ExecuteCommand) -> Result<String, CliError> {
 }
 
 pub(crate) fn execute_program_from_witness(
-    inputs_map: WitnessMap,
+    inputs_map: WitnessMap<FieldElement>,
     bytecode: &[u8],
     foreign_call_resolver_url: Option<&str>,
-) -> Result<WitnessStack, CliError> {
-    let blackbox_solver = Bn254BlackBoxSolver::new();
-    let program: Program = Program::deserialize_program(bytecode)
+) -> Result<WitnessStack<FieldElement>, CliError> {
+    let program: Program<FieldElement> = Program::deserialize_program(bytecode)
         .map_err(|_| CliError::CircuitDeserializationError())?;
     execute_program(
         &program,
         inputs_map,
-        &blackbox_solver,
+        &default_blackbox_solver(),
         &mut DefaultForeignCallExecutor::new(true, foreign_call_resolver_url),
     )
     .map_err(CliError::CircuitExecutionError)

@@ -1,5 +1,6 @@
 use acvm::acir::circuit::ExpressionWidth;
 use acvm::acir::native_types::WitnessMap;
+use acvm::FieldElement;
 use clap::Args;
 use nargo::constants::PROVER_INPUT_FILE;
 use nargo::workspace::Workspace;
@@ -16,6 +17,7 @@ use dap::responses::ResponseBody;
 use dap::server::Server;
 use dap::types::Capabilities;
 use serde_json::Value;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use super::debug_cmd::compile_bin_package_for_debugging;
 use super::fs::inputs::read_inputs_from_file;
@@ -24,7 +26,6 @@ use crate::errors::CliError;
 use super::NargoConfig;
 
 use noir_debugger::errors::{DapError, LoadError};
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 #[derive(Debug, Clone, Args)]
 pub(crate) struct DapCommand {
@@ -101,7 +102,7 @@ fn load_and_compile_project(
     expression_width: ExpressionWidth,
     acir_mode: bool,
     skip_instrumentation: bool,
-) -> Result<(CompiledProgram, WitnessMap), LoadError> {
+) -> Result<(CompiledProgram, WitnessMap<FieldElement>), LoadError> {
     let workspace = find_workspace(project_folder, package)
         .ok_or(LoadError::Generic(workspace_not_found_error_msg(project_folder, package)))?;
     let package = workspace

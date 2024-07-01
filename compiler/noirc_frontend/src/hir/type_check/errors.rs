@@ -28,7 +28,7 @@ pub enum Source {
     Return(FunctionReturnType, Span),
 }
 
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone)]
 pub enum TypeCheckError {
     #[error("Operator {op:?} cannot be used in a {place:?}")]
     OpCannotBeUsed { op: HirBinaryOp, place: &'static str, span: Span },
@@ -116,6 +116,10 @@ pub enum TypeCheckError {
     #[error("Constraint for `{typ}: {trait_name}` is not needed, another matching impl is already in scope")]
     UnneededTraitConstraint { trait_name: String, typ: Type, span: Span },
     #[error(
+        "Expected {expected_count} generic(s) from this function, but {actual_count} were provided"
+    )]
+    IncorrectTurbofishGenericCount { expected_count: usize, actual_count: usize, span: Span },
+    #[error(
         "Cannot pass a mutable reference from a constrained runtime to an unconstrained runtime"
     )]
     ConstrainedReferenceToUnconstrained { span: Span },
@@ -139,6 +143,8 @@ pub enum TypeCheckError {
     },
     #[error("Strings do not support indexed assignment")]
     StringIndexAssign { span: Span },
+    #[error("Macro calls may only return Expr values")]
+    MacroReturningNonExpr { typ: Type, span: Span },
 }
 
 impl TypeCheckError {
@@ -325,6 +331,17 @@ impl<'a> From<&'a TypeCheckError> for Diagnostic {
                     "`{trait_name}::{method_name}` expects {expected_num_parameters} parameter{plural}, but this method has {actual_num_parameters}");
                 Diagnostic::simple_error(primary_message, "".to_string(), *span)
             }
+            TypeCheckError::IncorrectTurbofishGenericCount { expected_count, actual_count, span } => {
+                let expected_plural = if *expected_count == 1 { "" } else { "s" };
+                let actual_plural = if *actual_count == 1 { "was" } else { "were" };
+                let msg = format!("Expected {expected_count} generic{expected_plural} from this function, but {actual_count} {actual_plural} provided");
+                Diagnostic::simple_error(msg, "".into(), *span)
+            },
+            TypeCheckError::MacroReturningNonExpr { typ, span } => Diagnostic::simple_error(
+                format!("Expected macro call to return an `Expr` but found a(n) {typ}"),
+                "Macro calls must return quoted expressions, otherwise there is no code to insert".into(),
+                *span,
+                ),
         }
     }
 }

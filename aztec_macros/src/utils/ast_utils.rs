@@ -1,9 +1,9 @@
 use noirc_errors::{Span, Spanned};
 use noirc_frontend::ast::{
     BinaryOpKind, CallExpression, CastExpression, Expression, ExpressionKind, FunctionReturnType,
-    Ident, IndexExpression, InfixExpression, Lambda, LetStatement, MethodCallExpression,
-    NoirTraitImpl, Path, Pattern, PrefixExpression, Statement, StatementKind, TraitImplItem,
-    UnaryOp, UnresolvedType, UnresolvedTypeData,
+    Ident, IndexExpression, InfixExpression, Lambda, LetStatement, MemberAccessExpression,
+    MethodCallExpression, NoirTraitImpl, Path, Pattern, PrefixExpression, Statement, StatementKind,
+    TraitImplItem, UnaryOp, UnresolvedType, UnresolvedTypeData,
 };
 use noirc_frontend::token::SecondaryAttribute;
 
@@ -27,15 +27,15 @@ pub fn expression(kind: ExpressionKind) -> Expression {
 }
 
 pub fn variable(name: &str) -> Expression {
-    expression(ExpressionKind::Variable(ident_path(name)))
+    expression(ExpressionKind::Variable(ident_path(name), None))
 }
 
 pub fn variable_ident(identifier: Ident) -> Expression {
-    expression(ExpressionKind::Variable(path(identifier)))
+    expression(ExpressionKind::Variable(path(identifier), None))
 }
 
 pub fn variable_path(path: Path) -> Expression {
-    expression(ExpressionKind::Variable(path))
+    expression(ExpressionKind::Variable(path, None))
 }
 
 pub fn method_call(
@@ -47,11 +47,17 @@ pub fn method_call(
         object,
         method_name: ident(method_name),
         arguments,
+        is_macro_call: false,
+        generics: None,
     })))
 }
 
 pub fn call(func: Expression, arguments: Vec<Expression>) -> Expression {
-    expression(ExpressionKind::Call(Box::new(CallExpression { func: Box::new(func), arguments })))
+    expression(ExpressionKind::Call(Box::new(CallExpression {
+        func: Box::new(func),
+        is_macro_call: false,
+        arguments,
+    })))
 }
 
 pub fn pattern(name: &str) -> Pattern {
@@ -125,6 +131,13 @@ pub fn make_statement(kind: StatementKind) -> Statement {
     Statement { span: Span::default(), kind }
 }
 
+pub fn member_access(lhs: Expression, member: &str) -> Expression {
+    expression(ExpressionKind::MemberAccess(Box::new(MemberAccessExpression {
+        lhs,
+        rhs: ident(member),
+    })))
+}
+
 #[macro_export]
 macro_rules! chained_path {
     ( $base:expr ) => {
@@ -148,7 +161,7 @@ macro_rules! chained_dep {
     ( $base:expr $(, $tail:expr)* ) => {
         {
             let mut base_path = ident_path($base);
-            base_path.kind = PathKind::Dep;
+            base_path.kind = PathKind::Plain;
             $(
                 base_path.segments.push(ident($tail));
             )*

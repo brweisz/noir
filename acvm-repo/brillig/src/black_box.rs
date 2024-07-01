@@ -61,13 +61,13 @@ pub enum BlackBoxOp {
         signature: HeapVector,
         result: MemoryAddress,
     },
-    /// Calculates a Pedersen commitment to the inputs.
+    /// Deprecated. To be removed with a sync from aztec-packages
     PedersenCommitment {
         inputs: HeapVector,
         domain_separator: MemoryAddress,
         output: HeapArray,
     },
-    /// Calculates a Pedersen hash to the inputs.
+    /// Deprecated. To be removed with a sync from aztec-packages
     PedersenHash {
         inputs: HeapVector,
         domain_separator: MemoryAddress,
@@ -83,8 +83,10 @@ pub enum BlackBoxOp {
     EmbeddedCurveAdd {
         input1_x: MemoryAddress,
         input1_y: MemoryAddress,
+        input1_infinite: MemoryAddress,
         input2_x: MemoryAddress,
         input2_y: MemoryAddress,
+        input2_infinite: MemoryAddress,
         result: HeapArray,
     },
     BigIntAdd {
@@ -124,6 +126,11 @@ pub enum BlackBoxOp {
     Sha256Compression {
         input: HeapVector,
         hash_values: HeapVector,
+        output: HeapArray,
+    },
+    ToRadix {
+        input: MemoryAddress,
+        radix: u32,
         output: HeapArray,
     },
 }

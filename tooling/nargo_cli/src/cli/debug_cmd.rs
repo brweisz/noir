@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use acvm::acir::native_types::{WitnessMap, WitnessStack};
+use acvm::FieldElement;
 use clap::Args;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use fm::FileManager;
-use nargo::artifacts::debug::DebugArtifact;
 use nargo::constants::PROVER_INPUT_FILE;
 use nargo::errors::CompileError;
 use nargo::ops::{compile_program, compile_program_with_debug_instrumenter, report_errors};
@@ -14,13 +15,13 @@ use nargo::{insert_all_files_for_workspace_into_file_manager, parse_all};
 use nargo_toml::{get_package_manifest, resolve_workspace_from_toml, PackageSelection};
 use noirc_abi::input_parser::{Format, InputValue};
 use noirc_abi::InputMap;
+use noirc_artifacts::debug::DebugArtifact;
 use noirc_driver::{
     file_manager_with_stdlib, CompileOptions, CompiledProgram, NOIR_ARTIFACT_VERSION_STRING,
 };
 use noirc_frontend::debug::DebugInstrumenter;
 use noirc_frontend::graph::CrateName;
 use noirc_frontend::hir::ParsedFiles;
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
 
 use super::fs::{inputs::read_inputs_from_file, witness::save_witness_to_dir};
 use super::NargoConfig;
@@ -199,16 +200,15 @@ fn debug_program_and_decode(
     program: CompiledProgram,
     package: &Package,
     prover_name: &str,
-) -> Result<(Option<InputValue>, Option<WitnessMap>), CliError> {
+) -> Result<(Option<InputValue>, Option<WitnessMap<FieldElement>>), CliError> {
     // Parse the initial witness values from Prover.toml
     let (inputs_map, _) =
         read_inputs_from_file(&package.root_dir, prover_name, Format::Toml, &program.abi)?;
     let solved_witness = debug_program(&program, &inputs_map)?;
-    let public_abi = program.abi.public_abi();
 
     match solved_witness {
         Some(witness) => {
-            let (_, return_value) = public_abi.decode(&witness)?;
+            let (_, return_value) = program.abi.decode(&witness)?;
             Ok((return_value, Some(witness)))
         }
         None => Ok((None, None)),
@@ -218,16 +218,15 @@ fn debug_program_and_decode(
 pub(crate) fn debug_program(
     compiled_program: &CompiledProgram,
     inputs_map: &InputMap,
-) -> Result<Option<WitnessMap>, CliError> {
-    let blackbox_solver = default_blackbox_solver();
-
+) -> Result<Option<WitnessMap<FieldElement>>, CliError> {
     let initial_witness = compiled_program.abi.encode(inputs_map, None)?;
 
     let debug_artifact = DebugArtifact {
         debug_symbols: compiled_program.debug.clone(),
         file_map: compiled_program.file_map.clone(),
-        warnings: compiled_program.warnings.clone(),
     };
+
+    let blackbox_solver = default_blackbox_solver();
 
     noir_debugger::debug_circuit(
         &blackbox_solver,

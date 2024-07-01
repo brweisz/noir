@@ -5,13 +5,14 @@
 
 pub mod compiler;
 pub mod pwg;
+pub mod default_blackbox_solver;
 
 pub use acvm_blackbox_solver::{BlackBoxFunctionSolver, BlackBoxResolutionError};
 use pwg::OpcodeResolutionError;
 
 // re-export acir
 pub use acir;
-pub use acir::FieldElement;
+pub use acir::{AcirField, FieldElement};
 // re-export brillig vm
 pub use brillig_vm;
 // re-export blackbox solver

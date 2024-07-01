@@ -5,7 +5,7 @@ use async_lsp::{
 use clap::Args;
 use noir_lsp::NargoLspService;
 use tower::ServiceBuilder;
-use crate::cli::default_blackbox_solver::default_blackbox_solver;
+use acvm::default_blackbox_solver::default_blackbox_solver;
 
 use super::NargoConfig;
 use crate::errors::CliError;
