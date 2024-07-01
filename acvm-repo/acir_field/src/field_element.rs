@@ -265,7 +265,10 @@ impl<F: PrimeField> AcirField for FieldElement<F> {
     }
 
     fn to_u128(self) -> u128 {
-        let bytes = self.to_be_bytes();
+        let mut bytes = [0; 32];
+        let be_bytes = self.to_be_bytes();
+        let num_bytes = be_bytes.len();
+        bytes[(32-num_bytes)..].copy_from_slice(&be_bytes);
         u128::from_be_bytes(bytes[16..32].try_into().unwrap())
     }
 
@@ -274,11 +277,13 @@ impl<F: PrimeField> AcirField for FieldElement<F> {
     }
 
     fn to_i128(self) -> i128 {
-        // Negative integers are represented by the range [p + i128::MIN, p) whilst
-        // positive integers are represented by the range [0, i128::MAX).
-        // We can then differentiate positive from negative values by their MSB.
-        let is_negative = self.neg().num_bits() < self.num_bits();
-        let bytes = if is_negative { self.neg() } else { self }.to_be_bytes();
+        let is_negative = self.is_negative();
+        let absolute_value = if is_negative { self.neg() } else { self };
+
+        let mut bytes = [0; 32];
+        let be_bytes = absolute_value.to_be_bytes();
+        let num_bytes = be_bytes.len();
+        bytes[(32-num_bytes)..].copy_from_slice(&be_bytes);
         i128::from_be_bytes(bytes[16..32].try_into().unwrap()) * if is_negative { -1 } else { 1 }
     }
 
