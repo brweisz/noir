@@ -277,7 +277,7 @@ impl<F: PrimeField> AcirField for FieldElement<F> {
     }
 
     fn to_i128(self) -> i128 {
-        let is_negative = self.is_negative();
+        let is_negative = self.neg().num_bits() < self.num_bits();
         let absolute_value = if is_negative { self.neg() } else { self };
 
         let mut bytes = [0; 32];
