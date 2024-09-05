@@ -1,26 +1,41 @@
+#[cfg(not(feature = "goldilocks"))]
 use std::io::Write;
 
+#[cfg(not(feature = "goldilocks"))]
 use acvm::{BlackBoxFunctionSolver, FieldElement};
+#[cfg(not(feature = "goldilocks"))]
 use bn254_blackbox_solver::Bn254BlackBoxSolver;
+
 use clap::Args;
+
+#[cfg(not(feature = "goldilocks"))]
 use fm::FileManager;
+#[cfg(not(feature = "goldilocks"))]
 use nargo::{
-    insert_all_files_for_workspace_into_file_manager, ops::TestStatus, package::Package, parse_all,
+    ops::TestStatus, package::Package,
     prepare_package,
 };
+#[cfg(not(feature = "goldilocks"))]
 use nargo_toml::{get_package_manifest, resolve_workspace_from_toml, PackageSelection};
+#[cfg(not(feature = "goldilocks"))]
 use noirc_driver::{
-    check_crate, compile_no_check, file_manager_with_stdlib, CompileOptions,
-    NOIR_ARTIFACT_VERSION_STRING,
+    check_crate, compile_no_check
 };
+use noirc_driver::CompileOptions;
+use noirc_frontend::graph::CrateName;
+#[cfg(not(feature = "goldilocks"))]
 use noirc_frontend::{
     graph::CrateName,
     hir::{FunctionNameMatch, ParsedFiles},
 };
-use rayon::prelude::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+#[cfg(not(feature = "goldilocks"))]
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+#[cfg(not(feature = "goldilocks"))]
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use crate::{cli::check_cmd::check_crate_and_report_errors, errors::CliError};
+#[cfg(not(feature = "goldilocks"))]
+use crate::{cli::check_cmd::check_crate_and_report_errors};
+use crate::errors::CliError;
 
 use super::NargoConfig;
 
@@ -56,7 +71,7 @@ pub(crate) struct TestCommand {
 }
 
 #[cfg(feature = "goldilocks")]
-pub(crate) fn run(args: TestCommand, config: NargoConfig) -> Result<(), CliError> {
+pub(crate) fn run(_args: TestCommand, _config: NargoConfig) -> Result<(), CliError> {
     todo!();
 }
 
@@ -108,11 +123,11 @@ pub(crate) fn run(args: TestCommand, config: NargoConfig) -> Result<(), CliError
         match &pattern {
             FunctionNameMatch::Exact(pattern) => {
                 return Err(CliError::Generic(
-                    format!("Found 0 tests matching input '{pattern}'.",),
+                    format!("Found 0 tests matching input '{pattern}'.", ),
                 ))
             }
             FunctionNameMatch::Contains(pattern) => {
-                return Err(CliError::Generic(format!("Found 0 tests containing '{pattern}'.",)))
+                return Err(CliError::Generic(format!("Found 0 tests containing '{pattern}'.", )))
             }
             // If we are running all tests in a crate, having none is not an error
             FunctionNameMatch::Anything => {}
@@ -126,6 +141,7 @@ pub(crate) fn run(args: TestCommand, config: NargoConfig) -> Result<(), CliError
     }
 }
 
+#[cfg(not(feature = "goldilocks"))]
 fn run_tests<S: BlackBoxFunctionSolver<FieldElement> + Default>(
     file_manager: &FileManager,
     parsed_files: &ParsedFiles,
@@ -164,6 +180,7 @@ fn run_tests<S: BlackBoxFunctionSolver<FieldElement> + Default>(
     Ok(test_report)
 }
 
+#[cfg(not(feature = "goldilocks"))]
 fn run_test<S: BlackBoxFunctionSolver<FieldElement> + Default>(
     file_manager: &FileManager,
     parsed_files: &ParsedFiles,
@@ -184,7 +201,7 @@ fn run_test<S: BlackBoxFunctionSolver<FieldElement> + Default>(
         compile_options.disable_macros,
         compile_options.use_legacy,
     )
-    .expect("Any errors should have occurred when collecting test functions");
+        .expect("Any errors should have occurred when collecting test functions");
 
     let test_functions = context
         .get_all_test_functions_in_crate_matching(&crate_id, FunctionNameMatch::Exact(fn_name));
@@ -235,6 +252,7 @@ fn run_test<S: BlackBoxFunctionSolver<FieldElement> + Default>(
     }
 }
 
+#[cfg(not(feature = "goldilocks"))]
 fn get_tests_in_package(
     file_manager: &FileManager,
     parsed_files: &ParsedFiles,
@@ -259,6 +277,7 @@ fn get_tests_in_package(
         .collect())
 }
 
+#[cfg(not(feature = "goldilocks"))]
 fn display_test_report(
     file_manager: &FileManager,
     package: &Package,
@@ -325,7 +344,7 @@ fn display_test_report(
             writer
                 .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
                 .expect("Failed to set color");
-            write!(writer, "{count_passed} test{plural_passed} passed, ",)
+            write!(writer, "{count_passed} test{plural_passed} passed, ", )
                 .expect("Failed to write to stderr");
         }
 
